@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model ConfigVersion {
+  id          String      @id @default(cuid())
+  summary     String
+  paramsJson  Json
+  isActive    Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  replayJobs  ReplayJob[]
+}
+
+model Candle {
+  id         String   @id @default(cuid())
+  symbol     String
+  timeframe  String
+  openTime   DateTime
+  open       Float
+  high       Float
+  low        Float
+  close      Float
+  volume     Float?
+  source     String
+  createdAt  DateTime @default(now())
+
+  @@unique([symbol, timeframe, openTime])
+  @@index([symbol, timeframe, openTime])
+}
+
+model Tweet {
+  id          String               @id
+  author      String
+  text        String
+  publishedAt DateTime
+  createdAt   DateTime             @default(now())
+  viewpoints  AttributedViewpoint[]
+}
+
+model AttributedViewpoint {
+  id                String   @id @default(cuid())
+  tweetId           String
+  symbol            String?
+  publishedAt       DateTime
+  bias              String
+  reasoning         String?
+  evidenceTermsJson Json?
+  confidence        Float
+  sourceType        String
+  createdAt         DateTime @default(now())
+  tweet             Tweet    @relation(fields: [tweetId], references: [id], onDelete: Cascade)
+
+  @@index([symbol, publishedAt])
+}
+
+model Job {
+  id          String   @id @default(cuid())
+  type        String
+  status      String   @default("queued")
+  payloadJson Json
+  error       String?
+  createdAt   DateTime @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+}
+
+model RunSnapshot {
+  id                String   @id @default(cuid())
+  mode              String
+  strategyVersion   String
+  warningsJson      Json
+  assetsJson        Json
+  inputRefsJson     Json?
+  degradedAssetsJson Json?
+  createdAt         DateTime @default(now())
+}
+
+model ReplayJob {
+  id              String         @id @default(cuid())
+  configVersionId String?
+  fromTime        DateTime
+  toTime          DateTime
+  status          String         @default("queued")
+  resultJson      Json?
+  createdAt       DateTime       @default(now())
+  completedAt     DateTime?
+  configVersion   ConfigVersion? @relation(fields: [configVersionId], references: [id], onDelete: SetNull)
+}
