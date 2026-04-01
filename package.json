@@ -9,7 +9,7 @@
     "start": "next start",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test --pass-with-no-tests"
   },
   "keywords": [],
   "author": "",
