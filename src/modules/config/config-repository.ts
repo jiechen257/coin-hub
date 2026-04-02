@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { configSchema, type ConfigInput } from "@/modules/config/config-schema";
 
@@ -43,7 +44,8 @@ export async function createConfigVersion(input: {
     return tx.configVersion.create({
       data: {
         summary: input.summary,
-        paramsJson: params,
+        // params has been schema-validated to JSON-compatible data before crossing into Prisma.
+        paramsJson: params as Prisma.InputJsonObject,
         isActive: true,
       },
     });

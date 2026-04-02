@@ -3,13 +3,18 @@
   "version": "1.0.0",
   "description": "",
   "private": true,
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
     "dev": "next dev",
+    "worker": "tsx src/worker/index.ts",
+    "scheduler": "node scripts/scheduler-deprecated.cjs",
     "build": "next build",
     "start": "next start",
-    "test": "vitest",
+    "test": "vitest run",
     "test:ui": "vitest --ui",
-    "test:e2e": "playwright test --pass-with-no-tests"
+    "test:e2e": "playwright test"
   },
   "keywords": [],
   "author": "",
