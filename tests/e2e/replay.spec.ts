@@ -3,12 +3,7 @@ import { expect, test } from "playwright/test";
 test("submit replay job from the replay lab", async ({ page }) => {
   const summary = `replay target ${crypto.randomUUID()}`;
 
-  await page.goto("http://localhost:3000/login");
-
-  await page.getByLabel("登录密码").fill("secret-pass");
-  await page.getByRole("button", { name: "登录" }).click();
-
-  await expect(page).toHaveURL("http://localhost:3000/config");
+  await page.goto("http://localhost:3000/config");
   await page.waitForTimeout(500);
 
   await page.getByLabel("摘要").fill(summary);

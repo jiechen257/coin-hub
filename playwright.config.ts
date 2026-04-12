@@ -19,7 +19,6 @@ export default defineConfig({
     // native module ABI drift between nvm/homebrew installations.
     command: `${process.execPath} ./node_modules/next/dist/bin/next dev`,
     env: {
-      APP_PASSWORD: process.env.APP_PASSWORD ?? "secret-pass",
       DATABASE_URL: process.env.DATABASE_URL ?? "file:./prisma/dev.db",
     },
     url: "http://localhost:3000",

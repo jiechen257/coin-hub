@@ -1,13 +1,16 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { isAuthenticated } from "@/modules/auth/auth-service";
+import { AppShell } from "@/components/app-shell/app-shell";
+import { OverviewDashboard } from "@/components/overview/overview-dashboard";
+import { getOverviewPayload } from "@/modules/overview/overview-service";
 
+/**
+ * 渲染根路由首页，把服务端总览数据直接送进首页控制台。
+ */
 export default async function HomePage() {
-  const cookieStore = await cookies();
+  const overview = await getOverviewPayload();
 
-  if (isAuthenticated(cookieStore)) {
-    redirect("/config");
-  }
-
-  redirect("/login");
+  return (
+    <AppShell>
+      <OverviewDashboard initialData={overview} />
+    </AppShell>
+  );
 }

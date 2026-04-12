@@ -1,24 +1,13 @@
 import { expect, test } from "playwright/test";
 
-test("command center shows asset cards and can submit a manual analysis job", async ({
+test("command center redirects to the homepage overview entry", async ({
   page,
 }) => {
-  await page.goto("http://localhost:3000/login");
-
-  await page.getByLabel("登录密码").fill("secret-pass");
-  await page.getByRole("button", { name: "登录" }).click();
-
-  await expect(page).toHaveURL("http://localhost:3000/config");
-
   await page.goto("http://localhost:3000/command-center");
 
-  await expect(
-    page.getByRole("heading", { level: 1, name: "命令中心" }),
-  ).toBeVisible();
-  await expect(page.getByRole("heading", { level: 3, name: "BTC" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 3, name: "ETH" })).toBeVisible();
-
-  await page.getByRole("button", { name: "运行分析" }).click();
-
-  await expect(page.getByText(/分析任务已入队/)).toBeVisible();
+  await expect(page).toHaveURL("http://localhost:3000/");
+  await expect(page.getByRole("heading", { name: "策略总览" })).toBeVisible();
+  await expect(page.getByText("首页总览", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "总览" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "命令中心" })).toHaveCount(0);
 });
