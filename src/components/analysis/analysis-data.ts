@@ -1,5 +1,6 @@
 import { buildChanState } from "@/modules/chan/build-chan-state";
-import type { Candle } from "@/modules/chan/types";
+import type { Candle, ChanState } from "@/modules/chan/types";
+import { readAnalysisCandles } from "@/modules/market-data/read-analysis-candles";
 import { buildTradeSignal, type TradeSignal } from "@/modules/signals/build-trade-signal";
 import { attributeViewpoint, type RawTweet, type ViewpointBias } from "@/modules/tweets/attribute-viewpoints";
 import { formatSignalBias } from "@/lib/display-text";
@@ -65,18 +66,7 @@ export type AnalysisSignal = AnalysisPayload["signal"];
 const SUPPORTED_SYMBOLS: AnalysisSymbol[] = ["BTC", "ETH"];
 const SUPPORTED_TIMEFRAMES: AnalysisTimeframe[] = ["15m", "1h", "4h", "1d"];
 
-const TIMEFRAME_MINUTES: Record<AnalysisTimeframe, number> = {
-  "15m": 15,
-  "1h": 60,
-  "4h": 240,
-  "1d": 1440,
-};
-
-const SYMBOL_BASE_PRICE: Record<AnalysisSymbol, number> = {
-  BTC: 68_000,
-  ETH: 3_400,
-};
-
+// 只允许分析页使用明确支持的资产，未知输入统一回退到 BTC。
 function normalizeSymbol(input: string): AnalysisSymbol {
   const upper = input.toUpperCase();
 
@@ -87,6 +77,7 @@ function normalizeSymbol(input: string): AnalysisSymbol {
   return "BTC";
 }
 
+// 统一约束时间周期输入，避免 query string 带来非法 timeframe。
 function normalizeTimeframe(input: string | null | undefined): AnalysisTimeframe {
   if (input && SUPPORTED_TIMEFRAMES.includes(input as AnalysisTimeframe)) {
     return input as AnalysisTimeframe;
@@ -95,10 +86,12 @@ function normalizeTimeframe(input: string | null | undefined): AnalysisTimeframe
   return "1h";
 }
 
+// 所有时间在 payload 中统一输出为 ISO 字符串，方便前端消费。
 function toIsoTime(value: Date | number | string): string {
   return new Date(value).toISOString();
 }
 
+// 把分析页 candle 结构映射成缠论计算需要的 Candle 输入。
 function mapCandlesToChanInput(symbol: AnalysisSymbol, candles: AnalysisCandle[]): Candle[] {
   return candles.map((candle) => ({
     symbol,
@@ -111,29 +104,22 @@ function mapCandlesToChanInput(symbol: AnalysisSymbol, candles: AnalysisCandle[]
   }));
 }
 
-function buildDemoCandles(symbol: AnalysisSymbol, timeframe: AnalysisTimeframe): AnalysisCandle[] {
-  const minutes = TIMEFRAME_MINUTES[timeframe];
-  const start = Date.UTC(2026, 3, 1, 0, 0, 0);
-  const base = SYMBOL_BASE_PRICE[symbol];
-  const bias = symbol === "BTC" ? 1 : 0.6;
-
-  return Array.from({ length: 24 }, (_, index) => {
-    const open = base + index * bias * 18 + (timeframe === "1d" ? index * 25 : index * 4);
-    const close = open + (index % 3 === 0 ? bias * 12 : bias * 8);
-    const high = Math.max(open, close) + bias * 10;
-    const low = Math.min(open, close) - bias * 9;
-
-    return {
-      openTime: toIsoTime(start + index * minutes * 60_000),
-      open,
-      high,
-      low,
-      close,
-      volume: 1000 + index * 55,
-    };
-  });
+// 没有同步到市场数据时，仍然保留一个符号明确的空 chanState，方便 signal 正常产出。
+function buildEmptyChanState(symbol: AnalysisSymbol): ChanState {
+  return {
+    symbol,
+    trendBias: "sideways",
+    structureSummary: "暂无可用趋势结构",
+    fractals: [],
+    strokes: [],
+    segments: [],
+    zs: [],
+    keyLevels: [],
+    timeframeStates: {},
+  };
 }
 
+// 当前阶段观点仍沿用内置研究切片，只把 K 线来源替换成真实市场数据。
 function buildDemoRawTweets(symbol: AnalysisSymbol, timeframe: AnalysisTimeframe): RawTweet[] {
   const prefix = symbol === "BTC" ? "BTC" : "ETH";
 
@@ -153,12 +139,14 @@ function buildDemoRawTweets(symbol: AnalysisSymbol, timeframe: AnalysisTimeframe
   ];
 }
 
+// 只保留与当前资产直接相关的推文，避免观点面板被无关内容稀释。
 function pickRelevantTweets(tweets: RawTweet[], symbol: AnalysisSymbol): RawTweet[] {
   const matched = tweets.filter((tweet) => new RegExp(`\\b${symbol}\\b`, "i").test(tweet.text));
 
   return (matched.length > 0 ? matched : tweets).slice(0, 4);
 }
 
+// 复用现有规则归因逻辑，把原始推文转换成分析页观点卡片结构。
 async function deriveViewpointsFromTweets(
   tweets: RawTweet[],
   symbol: AnalysisSymbol
@@ -185,6 +173,7 @@ async function deriveViewpointsFromTweets(
   });
 }
 
+// 根据缠论趋势偏向生成最小化结构标记，保持图表信息密度稳定。
 function buildStructureMarkers(
   candles: AnalysisCandle[],
   trendBias: "up" | "down" | "sideways"
@@ -221,6 +210,7 @@ function buildStructureMarkers(
   ];
 }
 
+// 信号标记只锚定到最新一根 K 线，突出当前决策位置。
 function buildSignalMarkers(
   candles: AnalysisCandle[],
   signal: AnalysisPayload["signal"]
@@ -242,6 +232,7 @@ function buildSignalMarkers(
   ];
 }
 
+// 观点标记按时间倒序贴近最近几根 K 线，帮助把观点和价格上下文对齐。
 function buildTweetMarkers(
   candles: AnalysisCandle[],
   viewpoints: AnalysisViewpoint[]
@@ -269,14 +260,7 @@ function buildTweetMarkers(
   });
 }
 
-function readWarnings(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.filter((item): item is string => typeof item === "string");
-}
-
+// 把关键信息浓缩成证据列表，供信号面板与 API 一并消费。
 function collectEvidence(
   symbol: AnalysisSymbol,
   timeframe: AnalysisTimeframe,
@@ -304,19 +288,22 @@ function collectEvidence(
   return evidence;
 }
 
+// 分析页 payload 以真实 Candle 为主数据源，再复用既有信号与观点装配链路。
 export async function loadAnalysisPayload(input: {
   symbol: string;
   timeframe?: string | null;
 }): Promise<AnalysisPayload> {
   const symbol = normalizeSymbol(input.symbol);
   const timeframe = normalizeTimeframe(input.timeframe);
-  const candles = buildDemoCandles(symbol, timeframe);
-  const chanState = buildChanState(mapCandlesToChanInput(symbol, candles));
+  // 先从 Candle 表读取最近一段真实 K 线；如果没有数据，直接保留空数组并打出显式告警。
+  const marketData = await readAnalysisCandles({ symbol, timeframe });
+  const candles = marketData.candles;
+  const chanState =
+    candles.length > 0
+      ? buildChanState(mapCandlesToChanInput(symbol, candles))
+      : buildEmptyChanState(symbol);
   const viewpoints = await deriveViewpointsFromTweets(buildDemoRawTweets(symbol, timeframe), symbol);
-  const warnings = [
-    `${symbol} ${timeframe} 当前展示的是演示研究切片。`,
-    "分析工作台暂未接入实时市场数据仓库。",
-  ];
+  const warnings = [...marketData.warnings];
 
   const baseSignal = buildTradeSignal({
     chanState,

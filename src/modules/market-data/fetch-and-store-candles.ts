@@ -1,4 +1,4 @@
-import { createBinanceClient } from "@/modules/market-data/binance-client";
+import { createBinanceFuturesClient } from "@/modules/market-data/binance-futures-client";
 import { candleRepository, type CandleRepository } from "@/modules/market-data/candle-repository";
 import {
   normalizeCandles,
@@ -19,11 +19,15 @@ export type FetchAndStoreCandlesDependencies = {
   timeframes?: CandleTimeframe[];
 };
 
+/**
+ * 按资产与周期批量抓取 Binance Futures K 线，并通过统一仓储做幂等写库。
+ */
 export async function fetchAndStoreCandles(
   symbols: readonly string[] = DEFAULT_SYMBOLS,
   dependencies: FetchAndStoreCandlesDependencies = {}
 ) {
-  const client: MarketDataClient = dependencies.client ?? createBinanceClient();
+  // 默认切换到 Binance USDⓈ-M 合约行情客户端，确保采集入口直接走真实 futures 数据源。
+  const client: MarketDataClient = dependencies.client ?? createBinanceFuturesClient();
   const repository = dependencies.repository ?? candleRepository;
   const timeframes = dependencies.timeframes ?? DEFAULT_TIMEFRAMES;
 
@@ -38,7 +42,8 @@ export async function fetchAndStoreCandles(
         symbol,
         timeframe,
         candles: normalizedCandles,
-        source: "binance",
+        // 明确标记为合约行情来源，便于后续分析和排查。
+        source: "binance-futures",
       });
 
       processedCandles += result.processedCandles;
