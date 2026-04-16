@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { listSerializedStrategyCandidates } from "@/components/research-desk/research-desk-data";
 import { buildStrategyCandidates } from "@/modules/strategies/candidate-service";
+
+export async function GET() {
+  const candidates = await listSerializedStrategyCandidates();
+  return NextResponse.json({ candidates });
+}
 
 export async function POST() {
   const samples = await db.tradeSample.findMany({
@@ -34,5 +40,8 @@ export async function POST() {
     }
   });
 
-  return NextResponse.json({ regenerated: candidates.length });
+  return NextResponse.json({
+    regenerated: candidates.length,
+    candidates: await listSerializedStrategyCandidates(),
+  });
 }

@@ -20,6 +20,7 @@ export type BinanceClient = {
 };
 
 const BINANCE_BASE_URL = "https://api.binance.com/api/v3/klines";
+const BINANCE_FETCH_TIMEOUT_MS = 5_000;
 
 function toBinanceSymbol(symbol: string) {
   return symbol.endsWith("USDT") ? symbol : `${symbol}USDT`;
@@ -43,7 +44,17 @@ export function createBinanceClient(fetchImpl: typeof fetch = fetch): BinanceCli
       url.searchParams.set("interval", timeframe);
       url.searchParams.set("limit", "500");
 
-      const response = await fetchImpl(url);
+      let response: Response;
+
+      try {
+        response = await fetchImpl(url, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(BINANCE_FETCH_TIMEOUT_MS),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "unknown fetch error";
+        throw new Error(`failed to fetch Binance candles for ${symbol} ${timeframe}: ${message}`);
+      }
 
       if (!response.ok) {
         throw new Error(`failed to fetch Binance candles for ${symbol} ${timeframe}`);

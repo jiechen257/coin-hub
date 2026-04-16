@@ -105,4 +105,50 @@ describe("market route", () => {
     expect(payload.candles).toHaveLength(1);
     expect(vi.mocked(fetchAndStoreCandles)).toHaveBeenCalledWith(["BTC"], { timeframes: ["1h"] });
   });
+
+  it("returns cached candles with warning when refresh fails", async () => {
+    await db.candle.create({
+      data: {
+        symbol: "BTC",
+        timeframe: "1h",
+        openTime: new Date("2026-04-16T00:00:00.000Z"),
+        open: 68000,
+        high: 68100,
+        low: 67900,
+        close: 68050,
+        volume: 10,
+        source: "binance",
+      },
+    });
+
+    vi.mocked(fetchAndStoreCandles).mockRejectedValue(new Error("connect timeout"));
+
+    const response = await GET(
+      new Request("http://localhost:3000/api/market/BTC?timeframe=1h"),
+      { params: Promise.resolve({ symbol: "BTC" }) },
+    );
+
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.candles).toHaveLength(1);
+    expect(payload.warning).toBe("Binance 行情拉取超时，当前展示本地缓存。");
+    expect(payload.stale).toBe(true);
+  });
+
+  it("returns empty candles with warning when refresh fails on cold start", async () => {
+    vi.mocked(fetchAndStoreCandles).mockRejectedValue(new Error("connect timeout"));
+
+    const response = await GET(
+      new Request("http://localhost:3000/api/market/BTC?timeframe=1h"),
+      { params: Promise.resolve({ symbol: "BTC" }) },
+    );
+
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.candles).toHaveLength(0);
+    expect(payload.warning).toBe("Binance 行情暂时不可用，本地也没有缓存。");
+    expect(payload.stale).toBe(true);
+  });
 });

@@ -30,7 +30,19 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const record = await createRecordFromInput(await request.json());
+    const createdRecord = await createRecordFromInput(await request.json());
+    const record = await db.traderRecord.findUniqueOrThrow({
+      where: { id: createdRecord.id },
+      include: {
+        trader: true,
+        executionPlans: {
+          include: {
+            sample: true,
+          },
+        },
+      },
+    });
+
     return NextResponse.json({ record }, { status: 201 });
   } catch (error) {
     if (error instanceof ZodError || error instanceof SyntaxError) {

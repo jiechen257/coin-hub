@@ -23,13 +23,26 @@ function parseTimeframe(value: string | null): CandleTimeframe {
 export async function GET(request: Request, context: MarketRouteContext) {
   const { symbol } = await context.params;
   const timeframe = parseTimeframe(new URL(request.url).searchParams.get("timeframe"));
+  let warning: string | null = null;
 
-  let candles = await candleRepository.listCandles({ symbol, timeframe });
-
-  if (candles.length === 0) {
+  try {
     await fetchAndStoreCandles([symbol], { timeframes: [timeframe] });
-    candles = await candleRepository.listCandles({ symbol, timeframe });
+  } catch (error) {
+    console.error(`[market] refresh failed for ${symbol} ${timeframe}`, error);
+    warning = "Binance 行情拉取超时，当前展示本地缓存。";
   }
 
-  return NextResponse.json({ symbol, timeframe, candles });
+  const candles = await candleRepository.listCandles({ symbol, timeframe });
+
+  if (candles.length === 0 && warning) {
+    warning = "Binance 行情暂时不可用，本地也没有缓存。";
+  }
+
+  return NextResponse.json({
+    symbol,
+    timeframe,
+    candles,
+    warning,
+    stale: warning !== null,
+  });
 }

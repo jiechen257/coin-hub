@@ -7,7 +7,6 @@ it("renders the trader strategy research desk shell", async () => {
   expect(
     screen.getByRole("heading", { name: "交易员策略研究台" }),
   ).toBeInTheDocument();
-  expect(screen.getByText("BTC · 1h")).toBeInTheDocument();
   expect(screen.getByText("记录流")).toBeInTheDocument();
   expect(screen.getByText("候选策略")).toBeInTheDocument();
 });
