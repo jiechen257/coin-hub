@@ -1,7 +1,14 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-const databaseUrl = process.env.DATABASE_URL ?? "file:./prisma/dev.db";
+const DEFAULT_LOCAL_DATABASE_URL = "file:./prisma/dev.db";
+const localDatabaseUrl = process.env.LOCAL_DATABASE_URL?.trim();
+const runtimeDatabaseUrl = process.env.DATABASE_URL?.trim();
+const databaseUrl =
+  localDatabaseUrl ||
+  (runtimeDatabaseUrl?.startsWith("file:")
+    ? runtimeDatabaseUrl
+    : DEFAULT_LOCAL_DATABASE_URL);
 
 if (!databaseUrl.startsWith("file:")) {
   process.exit(0);

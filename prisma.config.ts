@@ -1,6 +1,7 @@
 import "dotenv/config";
 
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
+import { resolvePrismaCliDatabaseUrl } from "./src/lib/database-runtime";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -8,6 +9,6 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: env("DATABASE_URL"),
+    url: resolvePrismaCliDatabaseUrl(process.env),
   },
 });
