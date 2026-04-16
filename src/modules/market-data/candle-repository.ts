@@ -5,6 +5,12 @@ export type StoreCandlesResult = {
   processedCandles: number;
 };
 
+export type ListCandlesInput = {
+  symbol: string;
+  timeframe: CandleTimeframe;
+  limit?: number;
+};
+
 export type CandleRepository = {
   storeCandles(input: {
     symbol: string;
@@ -12,23 +18,24 @@ export type CandleRepository = {
     candles: ReadonlyArray<NormalizedCandle>;
     source?: string;
   }): Promise<StoreCandlesResult>;
+  listCandles(input: ListCandlesInput): ReturnType<typeof listCandles>;
 };
 
-export async function listCandles(input: {
-  symbol: string;
-  timeframe: CandleTimeframe;
-  limit?: number;
-}) {
-  return db.candle.findMany({
+const DEFAULT_CANDLE_LIMIT = 500;
+
+export async function listCandles(input: ListCandlesInput) {
+  const candles = await db.candle.findMany({
     where: {
       symbol: input.symbol,
       timeframe: input.timeframe,
     },
     orderBy: {
-      openTime: "asc",
+      openTime: "desc",
     },
-    take: input.limit ?? 500,
+    take: input.limit ?? DEFAULT_CANDLE_LIMIT,
   });
+
+  return candles.reverse();
 }
 
 export async function storeCandles(input: {
@@ -82,9 +89,7 @@ export async function storeCandles(input: {
   };
 }
 
-export const candleRepository: CandleRepository & {
-  listCandles: typeof listCandles;
-} = {
+export const candleRepository: CandleRepository = {
   storeCandles,
   listCandles,
 };

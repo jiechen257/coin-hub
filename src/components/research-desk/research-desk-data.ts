@@ -6,6 +6,8 @@ type ResearchDeskSelection = {
   timeframe: "15m" | "1h" | "4h" | "1d";
 };
 
+const MAX_RESEARCH_DESK_CANDIDATES = 20;
+
 export async function loadResearchDeskPayload(input: ResearchDeskSelection) {
   const [traders, records, candidates, candles] = await Promise.all([
     db.traderProfile.findMany({
@@ -40,6 +42,7 @@ export async function loadResearchDeskPayload(input: ResearchDeskSelection) {
         },
       },
       orderBy: [{ sampleCount: "desc" }, { updatedAt: "desc" }],
+      take: MAX_RESEARCH_DESK_CANDIDATES,
     }),
     candleRepository.listCandles({
       symbol: input.symbol,
