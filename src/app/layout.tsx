@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Coin Hub | 策略控制台",
-  description: "单用户策略控制台",
+  title: "Coin Hub | 交易员策略研究台",
+  description: "记录交易员决策、结算样本、沉淀候选策略的本地研究工具",
 };
 
 export default function RootLayout({
