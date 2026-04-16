@@ -1,9 +1,9 @@
 // @vitest-environment node
 
 import { db } from "@/lib/db";
-import { createTraderRecord } from "@/modules/records/record-repository";
+import { createRecordFromInput } from "@/modules/records/record-service";
 
-describe("record-repository", () => {
+describe("record-service", () => {
   beforeEach(async () => {
     await db.executionPlan.deleteMany();
     await db.traderRecord.deleteMany();
@@ -16,65 +16,61 @@ describe("record-repository", () => {
     await db.traderProfile.deleteMany();
   });
 
-  it("stores a trader record with its execution plan", async () => {
-    const trader = await db.traderProfile.create({
-      data: { name: "Trader A", platform: "manual" },
-    });
+  it("creates a trade record with an automatic ready plan", async () => {
+    const trader = await db.traderProfile.create({ data: { name: "Trader Auto" } });
 
-    const record = await createTraderRecord({
+    const record = await createRecordFromInput({
       traderId: trader.id,
       symbol: "BTC",
-      timeframe: "1h",
       recordType: "trade",
       sourceType: "manual",
-      occurredAt: new Date("2026-04-16T08:00:00.000Z"),
-      rawContent: "BTC 多单，68000 开，69000 平",
-      plans: [
-        {
-          label: "real-trade",
-          side: "long",
-          entryPrice: 68000,
-          exitPrice: 69000,
-          marketContext: "trend",
-          triggerText: "follow breakout",
-          entryText: "enter on trader fill",
-          riskText: "stop below last swing",
-          exitText: "exit on trader close",
-        },
-      ],
+      occurredAt: "2026-04-16T08:00:00.000Z",
+      rawContent: "68000 开多，69000 平多",
+      plans: [],
+      trade: {
+        side: "long",
+        entryPrice: 68000,
+        exitPrice: 69000,
+        marketContext: "trend",
+        triggerText: "follow breakout",
+        entryText: "copy trader fill",
+        riskText: "stop below 67200",
+        exitText: "close with trader",
+      },
     });
 
-    expect(record.symbol).toBe("BTC");
-    expect(record.timeframe).toBe("1h");
-    expect(record.executionPlans).toHaveLength(1);
-    expect(record.executionPlans[0]?.label).toBe("real-trade");
+    expect(record.executionPlans[0]?.status).toBe("ready");
   });
 
-  it("marks a plan ready when entry and exit prices are present as zero values", async () => {
-    const trader = await db.traderProfile.create({
-      data: { name: "Trader Zero", platform: "manual" },
-    });
+  it("creates a view record with multiple draft plans", async () => {
+    const trader = await db.traderProfile.create({ data: { name: "Trader View" } });
 
-    const record = await createTraderRecord({
+    const record = await createRecordFromInput({
       traderId: trader.id,
-      symbol: "BTC",
-      recordType: "trade",
+      symbol: "ETH",
+      recordType: "view",
       sourceType: "manual",
-      occurredAt: new Date("2026-04-16T09:00:00.000Z"),
-      rawContent: "BTC 测试单，0 开，0 平",
+      occurredAt: "2026-04-16T09:00:00.000Z",
+      rawContent: "ETH 回踩仍偏多",
       plans: [
         {
-          label: "zero-priced-trade",
+          label: "plan-a",
           side: "long",
-          entryPrice: 0,
-          exitPrice: 0,
-          triggerText: "test trigger",
-          entryText: "test entry",
+          marketContext: "trend",
+          triggerText: "retest support",
+          entryText: "enter on reclaim",
+        },
+        {
+          label: "plan-b",
+          side: "long",
+          marketContext: "trend",
+          triggerText: "break prior high",
+          entryText: "enter on breakout",
         },
       ],
     });
 
-    expect(record.executionPlans).toHaveLength(1);
-    expect(record.executionPlans[0]?.status).toBe("ready");
+    expect(record.executionPlans).toHaveLength(2);
+    expect(record.executionPlans.every((plan) => plan.status === "draft")).toBe(true);
   });
 });

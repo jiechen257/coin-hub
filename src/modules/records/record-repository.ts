@@ -1,6 +1,21 @@
 import { db } from "@/lib/db";
 
-type CreateRecordInput = {
+export type ExecutionPlanInput = {
+  label: string;
+  side: "long" | "short";
+  entryPrice?: number;
+  exitPrice?: number;
+  stopLoss?: number;
+  takeProfit?: number;
+  marketContext?: string;
+  triggerText: string;
+  entryText: string;
+  riskText?: string;
+  exitText?: string;
+  notes?: string;
+};
+
+export type CreateRecordInput = {
   traderId: string;
   symbol: "BTC" | "ETH";
   timeframe?: string;
@@ -9,23 +24,10 @@ type CreateRecordInput = {
   occurredAt: Date;
   rawContent: string;
   notes?: string;
-  plans: Array<{
-    label: string;
-    side: "long" | "short";
-    entryPrice?: number;
-    exitPrice?: number;
-    stopLoss?: number;
-    takeProfit?: number;
-    marketContext?: string;
-    triggerText: string;
-    entryText: string;
-    riskText?: string;
-    exitText?: string;
-    notes?: string;
-  }>;
+  plans: ExecutionPlanInput[];
 };
 
-function derivePlanStatus(plan: CreateRecordInput["plans"][number]) {
+function derivePlanStatus(plan: ExecutionPlanInput) {
   return plan.entryPrice !== undefined && plan.exitPrice !== undefined
     ? "ready"
     : "draft";
