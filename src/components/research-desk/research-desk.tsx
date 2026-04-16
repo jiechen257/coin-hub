@@ -1,15 +1,13 @@
-type ResearchDeskProps = {
-  initialData: {
-    selection: { symbol: "BTC" | "ETH"; timeframe: "15m" | "1h" | "4h" | "1d" };
-    traders: unknown[];
-    records: unknown[];
-    selectedRecordId: string | null;
-    candidates: unknown[];
-    chart: { candles: unknown[]; markers: unknown[] };
-  };
+type ResearchDeskSelection = {
+  symbol: "BTC" | "ETH";
+  timeframe: "15m" | "1h" | "4h" | "1d";
 };
 
-export function ResearchDesk({ initialData }: ResearchDeskProps) {
+type ResearchDeskProps = {
+  selection: ResearchDeskSelection;
+};
+
+export function ResearchDesk({ selection }: ResearchDeskProps) {
   return (
     <section className="grid gap-6">
       <header className="space-y-2">
@@ -17,7 +15,7 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
         <div className="space-y-1">
           <h1 className="text-4xl font-semibold text-white">交易员策略研究台</h1>
           <p className="text-sm text-slate-300">
-            {initialData.selection.symbol} · {initialData.selection.timeframe}
+            {selection.symbol} · {selection.timeframe}
           </p>
         </div>
       </header>
