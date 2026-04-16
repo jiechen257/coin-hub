@@ -14,6 +14,23 @@ export type CandleRepository = {
   }): Promise<StoreCandlesResult>;
 };
 
+export async function listCandles(input: {
+  symbol: string;
+  timeframe: CandleTimeframe;
+  limit?: number;
+}) {
+  return db.candle.findMany({
+    where: {
+      symbol: input.symbol,
+      timeframe: input.timeframe,
+    },
+    orderBy: {
+      openTime: "asc",
+    },
+    take: input.limit ?? 500,
+  });
+}
+
 export async function storeCandles(input: {
   symbol: string;
   timeframe: CandleTimeframe;
@@ -65,6 +82,9 @@ export async function storeCandles(input: {
   };
 }
 
-export const candleRepository: CandleRepository = {
+export const candleRepository: CandleRepository & {
+  listCandles: typeof listCandles;
+} = {
   storeCandles,
+  listCandles,
 };
