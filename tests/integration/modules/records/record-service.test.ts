@@ -2,6 +2,17 @@
 
 import { db } from "@/lib/db";
 import { createRecordFromInput } from "@/modules/records/record-service";
+import { ZodError } from "zod";
+
+async function expectInputError(input: unknown, path: string) {
+  const error = await createRecordFromInput(input).catch((reason: unknown) => reason);
+
+  expect(error).toBeInstanceOf(ZodError);
+
+  if (error instanceof ZodError) {
+    expect(error.issues.some((issue) => issue.path.join(".") === path)).toBe(true);
+  }
+}
 
 describe("record-service", () => {
   beforeEach(async () => {
@@ -42,6 +53,29 @@ describe("record-service", () => {
     expect(record.executionPlans[0]?.status).toBe("ready");
   });
 
+  it("keeps zero-priced trade plans in ready status", async () => {
+    const trader = await db.traderProfile.create({ data: { name: "Trader Zero" } });
+
+    const record = await createRecordFromInput({
+      traderId: trader.id,
+      symbol: "BTC",
+      recordType: "trade",
+      sourceType: "manual",
+      occurredAt: "2026-04-16T08:30:00.000Z",
+      rawContent: "0 开多，0 平多",
+      plans: [],
+      trade: {
+        side: "long",
+        entryPrice: 0,
+        exitPrice: 0,
+        triggerText: "test trigger",
+        entryText: "test entry",
+      },
+    });
+
+    expect(record.executionPlans[0]?.status).toBe("ready");
+  });
+
   it("creates a view record with multiple draft plans", async () => {
     const trader = await db.traderProfile.create({ data: { name: "Trader View" } });
 
@@ -72,5 +106,67 @@ describe("record-service", () => {
 
     expect(record.executionPlans).toHaveLength(2);
     expect(record.executionPlans.every((plan) => plan.status === "draft")).toBe(true);
+  });
+
+  it("rejects trade records without the required trade payload", async () => {
+    const trader = await db.traderProfile.create({ data: { name: "Trader Missing Trade" } });
+
+    await expectInputError(
+      {
+        traderId: trader.id,
+        symbol: "BTC",
+        recordType: "trade",
+        sourceType: "manual",
+        occurredAt: "2026-04-16T10:00:00.000Z",
+        rawContent: "只写了交易结论",
+        plans: [],
+      },
+      "trade",
+    );
+  });
+
+  it("rejects trade records that try to create execution plans directly", async () => {
+    const trader = await db.traderProfile.create({ data: { name: "Trader Trade Plans" } });
+
+    await expectInputError(
+      {
+        traderId: trader.id,
+        symbol: "BTC",
+        recordType: "trade",
+        sourceType: "manual",
+        occurredAt: "2026-04-16T10:30:00.000Z",
+        rawContent: "只给 plans",
+        plans: [
+          {
+            label: "plan-a",
+            side: "long",
+            triggerText: "retest support",
+            entryText: "enter on reclaim",
+          },
+        ],
+      },
+      "trade",
+    );
+  });
+
+  it("rejects view records that send trade payloads instead of plans", async () => {
+    const trader = await db.traderProfile.create({ data: { name: "Trader View Trade" } });
+
+    await expectInputError(
+      {
+        traderId: trader.id,
+        symbol: "ETH",
+        recordType: "view",
+        sourceType: "manual",
+        occurredAt: "2026-04-16T11:00:00.000Z",
+        rawContent: "ETH 偏多",
+        trade: {
+          side: "long",
+          triggerText: "retest support",
+          entryText: "enter on reclaim",
+        },
+      },
+      "plans",
+    );
   });
 });

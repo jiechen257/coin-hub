@@ -1,12 +1,14 @@
 import { z } from "zod";
 
+const priceSchema = z.number().nonnegative();
+
 export const executionPlanInputSchema = z.object({
   label: z.string().min(1),
   side: z.enum(["long", "short"]),
-  entryPrice: z.number().positive().optional(),
-  exitPrice: z.number().positive().optional(),
-  stopLoss: z.number().positive().optional(),
-  takeProfit: z.number().positive().optional(),
+  entryPrice: priceSchema.optional(),
+  exitPrice: priceSchema.optional(),
+  stopLoss: priceSchema.optional(),
+  takeProfit: priceSchema.optional(),
   marketContext: z.string().min(1).optional(),
   triggerText: z.string().min(1),
   entryText: z.string().min(1),
@@ -17,10 +19,9 @@ export const executionPlanInputSchema = z.object({
 
 const tradeExecutionInputSchema = executionPlanInputSchema.omit({ label: true });
 
-export const createRecordSchema = z.object({
+const createRecordBaseSchema = {
   traderId: z.string().min(1),
   symbol: z.enum(["BTC", "ETH"]),
-  recordType: z.enum(["trade", "view"]),
   sourceType: z.enum([
     "manual",
     "twitter",
@@ -31,6 +32,27 @@ export const createRecordSchema = z.object({
   occurredAt: z.string().datetime(),
   rawContent: z.string().min(1),
   notes: z.string().min(1).optional(),
-  trade: tradeExecutionInputSchema.optional(),
-  plans: z.array(executionPlanInputSchema).default([]),
-});
+};
+
+const createTradeRecordSchema = z
+  .object({
+    ...createRecordBaseSchema,
+    recordType: z.literal("trade"),
+    trade: tradeExecutionInputSchema,
+    plans: z.array(executionPlanInputSchema).max(0).default([]),
+  })
+  .strict();
+
+const createViewRecordSchema = z
+  .object({
+    ...createRecordBaseSchema,
+    recordType: z.literal("view"),
+    plans: z.array(executionPlanInputSchema).min(1),
+    trade: z.never().optional(),
+  })
+  .strict();
+
+export const createRecordSchema = z.discriminatedUnion("recordType", [
+  createTradeRecordSchema,
+  createViewRecordSchema,
+]);

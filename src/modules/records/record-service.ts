@@ -5,13 +5,11 @@ export async function createRecordFromInput(input: unknown) {
   const parsed = createRecordSchema.parse(input);
 
   const plans =
-    parsed.recordType === "trade" && parsed.trade
+    parsed.recordType === "trade"
       ? [
           {
             ...parsed.trade,
             label: "real-trade",
-            entryPrice: parsed.trade.entryPrice,
-            exitPrice: parsed.trade.exitPrice,
           },
         ]
       : parsed.plans;
