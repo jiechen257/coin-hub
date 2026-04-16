@@ -1,5 +1,7 @@
 // @vitest-environment node
 
+import { POST as postTraderRecordsRoute } from "@/app/api/trader-records/route";
+import { POST as postTradersRoute } from "@/app/api/traders/route";
 import { db } from "@/lib/db";
 import { createRecordFromInput } from "@/modules/records/record-service";
 import { ZodError } from "zod";
@@ -12,6 +14,14 @@ async function expectInputError(input: unknown, path: string) {
   if (error instanceof ZodError) {
     expect(error.issues.some((issue) => issue.path.join(".") === path)).toBe(true);
   }
+}
+
+function createJsonRequest(url: string, body: unknown) {
+  return new Request(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 describe("record-service", () => {
@@ -168,5 +178,60 @@ describe("record-service", () => {
       },
       "plans",
     );
+  });
+
+  it("returns 400 for invalid /api/traders payloads", async () => {
+    const response = await postTradersRoute(
+      createJsonRequest("http://localhost/api/traders", {}),
+    );
+
+    expect(response.status).toBe(400);
+
+    const payload = (await response.json()) as {
+      error: string;
+      details: Array<{ path: string; message: string }>;
+    };
+    expect(payload.error).toBe("Invalid trader payload");
+    expect(payload.details[0]?.path).toBe("name");
+  });
+
+  it("creates traders through /api/traders", async () => {
+    const response = await postTradersRoute(
+      createJsonRequest("http://localhost/api/traders", {
+        name: "Trader Route",
+        platform: "manual",
+      }),
+    );
+
+    expect(response.status).toBe(201);
+
+    const payload = (await response.json()) as { trader: { name: string; platform: string } };
+    expect(payload.trader.name).toBe("Trader Route");
+    expect(payload.trader.platform).toBe("manual");
+  });
+
+  it("returns 400 for invalid /api/trader-records payloads", async () => {
+    const trader = await db.traderProfile.create({ data: { name: "Trader Route Invalid" } });
+
+    const response = await postTraderRecordsRoute(
+      createJsonRequest("http://localhost/api/trader-records", {
+        traderId: trader.id,
+        symbol: "BTC",
+        recordType: "trade",
+        sourceType: "manual",
+        occurredAt: "2026-04-16T12:00:00.000Z",
+        rawContent: "invalid trade payload",
+        plans: [],
+      }),
+    );
+
+    expect(response.status).toBe(400);
+
+    const payload = (await response.json()) as {
+      error: string;
+      details: Array<{ path: string; message: string }>;
+    };
+    expect(payload.error).toBe("Invalid trader record payload");
+    expect(payload.details.some((detail) => detail.path === "trade")).toBe(true);
   });
 });
