@@ -1,6 +1,7 @@
 "use client";
 
 import type { ResearchDeskTimeframe } from "@/components/research-desk/research-desk-types";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 type TimeframeSwitcherProps = {
   value: ResearchDeskTimeframe;
@@ -16,31 +17,24 @@ export function TimeframeSwitcher({
   disabled = false,
 }: TimeframeSwitcherProps) {
   return (
-    <div className="flex flex-wrap gap-2" role="tablist" aria-label="时间周期切换">
-      {TIMEFRAMES.map((timeframe) => {
-        const active = timeframe === value;
-
-        return (
-          <button
-            key={timeframe}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            aria-current={active ? "page" : undefined}
-            disabled={disabled}
-            onClick={() => onChange(timeframe)}
-            className={[
-              "rounded-md border px-4 py-2 text-sm font-medium transition",
-              active
-                ? "border-emerald-400/40 bg-emerald-400 text-slate-950"
-                : "border-white/10 bg-white/5 text-slate-200 hover:border-emerald-400/40 hover:bg-emerald-400/10",
-              disabled ? "cursor-not-allowed opacity-60" : "",
-            ].join(" ")}
-          >
-            {timeframe}
-          </button>
-        );
-      })}
-    </div>
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(nextValue) => {
+        if (nextValue) {
+          onChange(nextValue as ResearchDeskTimeframe);
+        }
+      }}
+      disabled={disabled}
+      variant="default"
+      aria-label="时间周期切换"
+      className="w-fit flex-wrap"
+    >
+      {TIMEFRAMES.map((timeframe) => (
+        <ToggleGroupItem key={timeframe} value={timeframe} aria-label={timeframe}>
+          {timeframe}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
   );
 }

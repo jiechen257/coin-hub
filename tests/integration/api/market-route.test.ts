@@ -12,6 +12,7 @@ vi.mock("@/modules/market-data/fetch-and-store-candles", () => ({
 describe("market route", () => {
   beforeEach(async () => {
     await db.candle.deleteMany();
+    vi.mocked(fetchAndStoreCandles).mockResolvedValue({ processedCandles: 0 });
   });
 
   afterEach(async () => {
@@ -106,7 +107,60 @@ describe("market route", () => {
     expect(vi.mocked(fetchAndStoreCandles)).toHaveBeenCalledWith(["BTC"], { timeframes: ["1h"] });
   });
 
-  it("returns cached candles with warning when refresh fails", async () => {
+  it("returns cached candles without waiting for background refresh", async () => {
+    await db.candle.create({
+      data: {
+        symbol: "BTC",
+        timeframe: "1h",
+        openTime: new Date("2026-04-16T00:00:00.000Z"),
+        open: 68000,
+        high: 68100,
+        low: 67900,
+        close: 68050,
+        volume: 10,
+        source: "binance",
+      },
+    });
+
+    const responseTimeoutMs = 100;
+    let resolveRefresh: ((value: { processedCandles: number }) => void) | null =
+      null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    vi.mocked(fetchAndStoreCandles).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+
+    const response = await Promise.race([
+      GET(new Request("http://localhost:3000/api/market/BTC?timeframe=1h"), {
+        params: Promise.resolve({ symbol: "BTC" }),
+      }),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error("cached market response timed out"));
+        }, responseTimeoutMs);
+      }),
+    ]);
+
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+
+    resolveRefresh?.({ processedCandles: 0 });
+
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.candles).toHaveLength(1);
+    expect(payload.warning).toBeNull();
+    expect(payload.stale).toBe(false);
+  });
+
+  it("returns cached candles when background refresh fails", async () => {
+    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
     await db.candle.create({
       data: {
         symbol: "BTC",
@@ -123,17 +177,24 @@ describe("market route", () => {
 
     vi.mocked(fetchAndStoreCandles).mockRejectedValue(new Error("connect timeout"));
 
-    const response = await GET(
-      new Request("http://localhost:3000/api/market/BTC?timeframe=1h"),
-      { params: Promise.resolve({ symbol: "BTC" }) },
-    );
+    try {
+      const response = await GET(
+        new Request("http://localhost:3000/api/market/BTC?timeframe=1h"),
+        { params: Promise.resolve({ symbol: "BTC" }) },
+      );
 
-    const payload = await response.json();
+      const payload = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(payload.candles).toHaveLength(1);
-    expect(payload.warning).toBe("Binance 行情拉取超时，当前展示本地缓存。");
-    expect(payload.stale).toBe(true);
+      expect(response.status).toBe(200);
+      expect(payload.candles).toHaveLength(1);
+      expect(payload.warning).toBeNull();
+      expect(payload.stale).toBe(false);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        "[market] background refresh failed for BTC 1h: connect timeout",
+      );
+    } finally {
+      consoleWarnSpy.mockRestore();
+    }
   });
 
   it("returns empty candles with warning when refresh fails on cold start", async () => {

@@ -86,6 +86,8 @@ export type ResearchDeskMarker = {
   position: "aboveBar" | "belowBar" | "inBar";
   label: string;
   text: string;
+  previewText?: string;
+  detailText?: string;
   tone: "bullish" | "bearish" | "neutral";
 };
 
@@ -129,6 +131,11 @@ export function buildRecordMarkers(
               : "多"
             : "观",
         text: `${record.trader.name} · ${record.rawContent}`,
+        previewText:
+          record.notes ??
+          firstPlan?.triggerText ??
+          `${record.trader.name} · ${record.rawContent}`,
+        detailText: record.rawContent,
         tone,
       };
     });

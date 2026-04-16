@@ -19,7 +19,8 @@ export type BinanceClient = {
   fetchCandles(symbol: string, timeframe: CandleTimeframe): Promise<RawCandle[]>;
 };
 
-const BINANCE_BASE_URL = "https://api.binance.com/api/v3/klines";
+// Binance Academy documents data-api.binance.vision as the public-market-data base URL.
+const BINANCE_BASE_URL = "https://data-api.binance.vision/api/v3/klines";
 const BINANCE_FETCH_TIMEOUT_MS = 5_000;
 
 function toBinanceSymbol(symbol: string) {
