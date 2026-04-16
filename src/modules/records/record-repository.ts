@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 type CreateRecordInput = {
   traderId: string;
   symbol: "BTC" | "ETH";
+  timeframe?: string;
   recordType: "trade" | "view";
   sourceType: "manual" | "twitter" | "telegram" | "discord" | "custom-import";
   occurredAt: Date;
@@ -24,11 +25,18 @@ type CreateRecordInput = {
   }>;
 };
 
+function derivePlanStatus(plan: CreateRecordInput["plans"][number]) {
+  return plan.entryPrice !== undefined && plan.exitPrice !== undefined
+    ? "ready"
+    : "draft";
+}
+
 export async function createTraderRecord(input: CreateRecordInput) {
   return db.traderRecord.create({
     data: {
       traderId: input.traderId,
       symbol: input.symbol,
+      timeframe: input.timeframe,
       recordType: input.recordType,
       sourceType: input.sourceType,
       occurredAt: input.occurredAt,
@@ -37,10 +45,7 @@ export async function createTraderRecord(input: CreateRecordInput) {
       executionPlans: {
         create: input.plans.map((plan) => ({
           ...plan,
-          status:
-            plan.entryPrice !== undefined && plan.exitPrice !== undefined
-              ? "ready"
-              : "draft",
+          status: derivePlanStatus(plan),
         })),
       },
     },

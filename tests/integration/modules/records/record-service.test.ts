@@ -24,6 +24,7 @@ describe("record-repository", () => {
     const record = await createTraderRecord({
       traderId: trader.id,
       symbol: "BTC",
+      timeframe: "1h",
       recordType: "trade",
       sourceType: "manual",
       occurredAt: new Date("2026-04-16T08:00:00.000Z"),
@@ -43,6 +44,8 @@ describe("record-repository", () => {
       ],
     });
 
+    expect(record.symbol).toBe("BTC");
+    expect(record.timeframe).toBe("1h");
     expect(record.executionPlans).toHaveLength(1);
     expect(record.executionPlans[0]?.label).toBe("real-trade");
   });
