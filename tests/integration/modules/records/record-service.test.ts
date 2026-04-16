@@ -46,4 +46,32 @@ describe("record-repository", () => {
     expect(record.executionPlans).toHaveLength(1);
     expect(record.executionPlans[0]?.label).toBe("real-trade");
   });
+
+  it("marks a plan ready when entry and exit prices are present as zero values", async () => {
+    const trader = await db.traderProfile.create({
+      data: { name: "Trader Zero", platform: "manual" },
+    });
+
+    const record = await createTraderRecord({
+      traderId: trader.id,
+      symbol: "BTC",
+      recordType: "trade",
+      sourceType: "manual",
+      occurredAt: new Date("2026-04-16T09:00:00.000Z"),
+      rawContent: "BTC 测试单，0 开，0 平",
+      plans: [
+        {
+          label: "zero-priced-trade",
+          side: "long",
+          entryPrice: 0,
+          exitPrice: 0,
+          triggerText: "test trigger",
+          entryText: "test entry",
+        },
+      ],
+    });
+
+    expect(record.executionPlans).toHaveLength(1);
+    expect(record.executionPlans[0]?.status).toBe("ready");
+  });
 });

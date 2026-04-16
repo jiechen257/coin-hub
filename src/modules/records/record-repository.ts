@@ -37,7 +37,10 @@ export async function createTraderRecord(input: CreateRecordInput) {
       executionPlans: {
         create: input.plans.map((plan) => ({
           ...plan,
-          status: plan.entryPrice && plan.exitPrice ? "ready" : "draft",
+          status:
+            plan.entryPrice !== undefined && plan.exitPrice !== undefined
+              ? "ready"
+              : "draft",
         })),
       },
     },

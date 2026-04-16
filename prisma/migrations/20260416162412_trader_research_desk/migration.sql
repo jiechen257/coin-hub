@@ -5,11 +5,6 @@ PRAGMA foreign_keys=on;
 
 -- DropTable
 PRAGMA foreign_keys=off;
-DROP TABLE "Candle";
-PRAGMA foreign_keys=on;
-
--- DropTable
-PRAGMA foreign_keys=off;
 DROP TABLE "ConfigVersion";
 PRAGMA foreign_keys=on;
 
