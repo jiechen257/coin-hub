@@ -6,6 +6,7 @@ process.env.TURSO_AUTH_TOKEN = "";
 const { POST: postTraderRecordsRoute } = await import("@/app/api/trader-records/route");
 const { POST: postTradersRoute } = await import("@/app/api/traders/route");
 const { db } = await import("@/lib/db");
+const { candleRepository } = await import("@/modules/market-data/candle-repository");
 const { createRecordFromInput } = await import("@/modules/records/record-service");
 import { ZodError } from "zod";
 
@@ -24,6 +25,33 @@ function createJsonRequest(url: string, body: unknown) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
+  });
+}
+
+function createOneHourCandleSeries(args: {
+  startAt: string;
+  length: number;
+  buildCandle?: (index: number) => {
+    open?: number;
+    high?: number;
+    low?: number;
+    close?: number;
+    volume?: number;
+  };
+}) {
+  const startTimeMs = new Date(args.startAt).getTime();
+
+  return Array.from({ length: args.length }, (_, index) => {
+    const overrides = args.buildCandle?.(index) ?? {};
+
+    return {
+      openTime: new Date(startTimeMs + index * 60 * 60 * 1_000),
+      open: overrides.open ?? 100,
+      high: overrides.high ?? 100.5,
+      low: overrides.low ?? 99.5,
+      close: overrides.close ?? 100.2,
+      volume: overrides.volume ?? 1,
+    };
   });
 }
 
@@ -146,6 +174,56 @@ describe("record-service", () => {
 
     expect(outcomes).toHaveLength(2);
     expect(outcomes.every((outcome) => outcome.resultLabel === "pending")).toBe(true);
+  });
+
+  it("persists a computed non-pending outcome when enough candles already exist", async () => {
+    const trader = await db.traderProfile.create({ data: { name: "Trader Computed" } });
+
+    await candleRepository.storeCandles({
+      symbol: "BTC",
+      timeframe: "1h",
+      candles: createOneHourCandleSeries({
+        startAt: "2026-04-16T08:00:00.000Z",
+        length: 24,
+        buildCandle: (index) =>
+          index === 1
+            ? {
+                open: 100.2,
+                high: 103,
+                low: 100,
+                close: 102.6,
+              }
+            : {},
+      }),
+    });
+
+    const record = await createRecordFromInput({
+      traderId: trader.id,
+      symbol: "BTC",
+      recordType: "trade",
+      sourceType: "manual",
+      occurredAt: "2026-04-16T08:00:00.000Z",
+      rawContent: "现有行情足够计算 outcome",
+      plans: [],
+      trade: {
+        side: "long",
+        entryPrice: 68000,
+        exitPrice: 69000,
+        triggerText: "fresh breakout",
+        entryText: "join with follow through",
+      },
+    });
+
+    const outcomes = await db.recordOutcome.findMany({
+      where: { recordId: record.id },
+    });
+
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]).toMatchObject({
+      resultLabel: "good",
+      timeframe: "1h",
+    });
+    expect(outcomes[0]?.resultReason).toContain("顺向");
   });
 
   it("rejects trade records without the required trade payload", async () => {

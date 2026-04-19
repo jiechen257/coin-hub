@@ -49,6 +49,12 @@ type SyncRecordOutcomesInput = {
   candles: OutcomeCandle[];
 };
 
+type CandleAlignment = {
+  alignedIndex: number;
+  alignedCandle: OutcomeCandle;
+  aligned: boolean;
+};
+
 const WINDOW_TYPE_BY_RECORD_TYPE = {
   trade: "trade-follow-through",
   view: "plan-follow-through",
@@ -83,7 +89,7 @@ function toSortedCandles(candles: OutcomeCandle[]) {
   );
 }
 
-function findNearestCandleIndex(candles: OutcomeCandle[], targetTime: Date) {
+function findNearestCandle(candles: OutcomeCandle[], targetTime: Date) {
   const targetTimeMs = targetTime.getTime();
   let nearestIndex = -1;
   let nearestDistance = Number.POSITIVE_INFINITY;
@@ -106,7 +112,34 @@ function findNearestCandleIndex(candles: OutcomeCandle[], targetTime: Date) {
     }
   });
 
-  return nearestIndex;
+  if (nearestIndex < 0) {
+    return null;
+  }
+
+  return {
+    alignedIndex: nearestIndex,
+    alignedCandle: candles[nearestIndex],
+    distanceMs: nearestDistance,
+  };
+}
+
+function resolveCandleAlignment(args: {
+  candles: OutcomeCandle[];
+  occurredAt: Date;
+  timeframe: CandleTimeframe;
+}): CandleAlignment | null {
+  const nearest = findNearestCandle(args.candles, args.occurredAt);
+
+  if (!nearest || nearest.distanceMs >= getTimeframeMs(args.timeframe)) {
+    return null;
+  }
+
+  return {
+    alignedIndex: nearest.alignedIndex,
+    alignedCandle: nearest.alignedCandle,
+    aligned:
+      nearest.alignedCandle.openTime.getTime() !== args.occurredAt.getTime(),
+  };
 }
 
 function buildPendingMetrics(): OutcomeMetrics {
@@ -273,6 +306,32 @@ function buildResultReason(args: {
   return `观察窗口未补齐，结果待定${alignmentSuffix}`;
 }
 
+function buildPendingOutcome(args: {
+  subjectType: UpsertRecordOutcomeInput["subjectType"];
+  subjectId: string;
+  record: OutcomeRecord;
+  timeframe: CandleTimeframe;
+  windowStartAt: Date;
+  windowEndAt: Date;
+  aligned: boolean;
+}) {
+  return {
+    subjectType: args.subjectType,
+    subjectId: args.subjectId,
+    symbol: args.record.symbol,
+    timeframe: args.timeframe,
+    windowType: WINDOW_TYPE_BY_RECORD_TYPE[args.record.recordType],
+    windowStartAt: args.windowStartAt,
+    windowEndAt: args.windowEndAt,
+    resultLabel: "pending" as const,
+    resultReason: buildResultReason({ resultLabel: "pending", aligned: args.aligned }),
+    forwardReturnPercent: null,
+    maxFavorableExcursionPercent: null,
+    maxAdverseExcursionPercent: null,
+    ruleVersion: OUTCOME_RULE_VERSION,
+  };
+}
+
 function buildOutcomeSubjects(record: OutcomeRecord) {
   if (record.recordType === "trade") {
     const primaryPlan = record.executionPlans.find((plan) => isOutcomePlanSide(plan.side));
@@ -309,38 +368,34 @@ function computeSingleOutcome(args: {
 }) {
   const profile = getOutcomeProfile(args.record.recordType, args.timeframe);
   const sortedCandles = toSortedCandles(args.candles);
-  const alignedIndex = findNearestCandleIndex(sortedCandles, args.record.occurredAt);
+  const alignment = resolveCandleAlignment({
+    candles: sortedCandles,
+    occurredAt: args.record.occurredAt,
+    timeframe: args.timeframe,
+  });
   const timeframeMs = getTimeframeMs(args.timeframe);
-  const alignedCandle = alignedIndex >= 0 ? sortedCandles[alignedIndex] : null;
+  const alignedCandle = alignment?.alignedCandle ?? null;
   const windowStartAt = alignedCandle?.openTime ?? args.record.occurredAt;
   const windowEndAt = new Date(
     windowStartAt.getTime() + timeframeMs * profile.windowCandles,
   );
-  const aligned = alignedCandle
-    ? alignedCandle.openTime.getTime() !== args.record.occurredAt.getTime()
-    : false;
+  const aligned = alignment?.aligned ?? false;
 
   if (!alignedCandle) {
-    return {
+    return buildPendingOutcome({
       subjectType: args.subjectType,
       subjectId: args.subjectId,
-      symbol: args.record.symbol,
+      record: args.record,
       timeframe: args.timeframe,
-      windowType: WINDOW_TYPE_BY_RECORD_TYPE[args.record.recordType],
       windowStartAt,
       windowEndAt,
-      resultLabel: "pending" as const,
-      resultReason: buildResultReason({ resultLabel: "pending", aligned }),
-      forwardReturnPercent: null,
-      maxFavorableExcursionPercent: null,
-      maxAdverseExcursionPercent: null,
-      ruleVersion: OUTCOME_RULE_VERSION,
-    };
+      aligned,
+    });
   }
 
   const windowCandles = sortedCandles.slice(
-    alignedIndex,
-    alignedIndex + profile.windowCandles,
+    alignment.alignedIndex,
+    alignment.alignedIndex + profile.windowCandles,
   );
   const metrics = buildOutcomeMetrics({
     side: args.side,
@@ -365,6 +420,18 @@ function computeSingleOutcome(args: {
   });
   const resolvedMetrics =
     resultLabel === "pending" ? buildPendingMetrics() : metrics;
+
+  if (resultLabel === "pending") {
+    return buildPendingOutcome({
+      subjectType: args.subjectType,
+      subjectId: args.subjectId,
+      record: args.record,
+      timeframe: args.timeframe,
+      windowStartAt,
+      windowEndAt,
+      aligned,
+    });
+  }
 
   return {
     subjectType: args.subjectType,
