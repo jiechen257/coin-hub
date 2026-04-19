@@ -18,6 +18,7 @@ type OutcomePlan = {
   side: OutcomePlanSide;
   triggerText: string;
   entryText: string;
+  sampleSettledAt: Date | null;
 };
 
 type OutcomeRecord = {
@@ -81,6 +82,16 @@ function isOutcomeRecordType(value: string): value is OutcomeRecordType {
 
 function isOutcomePlanSide(value: string): value is OutcomePlanSide {
   return value === "long" || value === "short";
+}
+
+function isOutcomePlan(value: {
+  id: string;
+  side: string;
+  triggerText: string;
+  entryText: string;
+  sampleSettledAt: Date | null;
+}): value is OutcomePlan {
+  return isOutcomePlanSide(value.side);
 }
 
 function toSortedCandles(candles: OutcomeCandle[]) {
@@ -148,6 +159,25 @@ function buildPendingMetrics(): OutcomeMetrics {
     mfePercent: null,
     maePercent: null,
   };
+}
+
+function resolveWindowEndAt(args: {
+  candles: OutcomeCandle[];
+  timeframeMs: number;
+  windowStartAt: Date;
+  settledAt: Date | null;
+}) {
+  if (args.settledAt) {
+    return args.settledAt;
+  }
+
+  const lastCandle = args.candles[args.candles.length - 1];
+
+  if (lastCandle) {
+    return new Date(lastCandle.openTime.getTime() + args.timeframeMs);
+  }
+
+  return new Date(args.windowStartAt.getTime() + args.timeframeMs);
 }
 
 function toDirectionalPercent(side: OutcomePlanSide, referencePrice: number, price: number) {
@@ -369,6 +399,7 @@ function buildOutcomeSubjects(record: OutcomeRecord) {
         subjectType: "record" as const,
         subjectId: record.id,
         side: primaryPlan.side,
+        settledAt: primaryPlan.sampleSettledAt,
       },
     ];
   }
@@ -379,6 +410,7 @@ function buildOutcomeSubjects(record: OutcomeRecord) {
       subjectType: "plan" as const,
       subjectId: plan.id,
       side: plan.side,
+      settledAt: plan.sampleSettledAt,
     }));
 }
 
@@ -388,6 +420,7 @@ function computeSingleOutcome(args: {
   subjectType: UpsertRecordOutcomeInput["subjectType"];
   subjectId: string;
   side: OutcomePlanSide;
+  settledAt: Date | null;
   candles: OutcomeCandle[];
 }) {
   const profile = getOutcomeProfile(args.record.recordType, args.timeframe);
@@ -400,12 +433,15 @@ function computeSingleOutcome(args: {
   const timeframeMs = getTimeframeMs(args.timeframe);
   const alignedCandle = alignment?.alignedCandle ?? null;
   const windowStartAt = alignedCandle?.openTime ?? args.record.occurredAt;
-  const windowEndAt = new Date(
-    windowStartAt.getTime() + timeframeMs * profile.windowCandles,
-  );
+  const windowEndAt = resolveWindowEndAt({
+    candles: sortedCandles,
+    timeframeMs,
+    windowStartAt,
+    settledAt: args.settledAt,
+  });
   const aligned = alignment?.aligned ?? false;
 
-  if (!alignedCandle) {
+  if (!alignment || !alignedCandle) {
     return buildPendingOutcome({
       subjectType: args.subjectType,
       subjectId: args.subjectId,
@@ -417,10 +453,11 @@ function computeSingleOutcome(args: {
     });
   }
 
-  const windowCandles = sortedCandles.slice(
-    alignment.alignedIndex,
-    alignment.alignedIndex + profile.windowCandles,
-  );
+  const rawWindowCandles = sortedCandles
+    .slice(alignment.alignedIndex)
+    .filter((candle) => candle.openTime.getTime() < windowEndAt.getTime());
+  const windowCandles =
+    rawWindowCandles.length > 0 ? rawWindowCandles : [alignedCandle];
   const metrics = buildOutcomeMetrics({
     side: args.side,
     referencePrice: alignedCandle.open,
@@ -438,7 +475,8 @@ function computeSingleOutcome(args: {
     timeframeMs,
   });
   const windowComplete =
-    windowIsContinuous && windowCandles.length >= profile.windowCandles;
+    windowIsContinuous &&
+    (Boolean(args.settledAt) || windowCandles.length >= profile.windowCandles);
   const resultLabel = resolveOutcomeLabel({
     metrics,
     favorableHitIndex,
@@ -489,6 +527,7 @@ export async function syncRecordOutcomes(input: SyncRecordOutcomesInput) {
       subjectType: subject.subjectType,
       subjectId: subject.subjectId,
       side: subject.side,
+      settledAt: subject.settledAt,
     }),
   );
 }
@@ -497,8 +536,11 @@ export async function syncOutcomesForRecordId(
   recordId: string,
   timeframe: CandleTimeframe = "1h",
 ) {
-  const record = await db.traderRecord.findUnique({
-    where: { id: recordId },
+  const record = await db.traderRecord.findFirst({
+    where: {
+      id: recordId,
+      archivedAt: null,
+    },
     include: {
       executionPlans: {
         select: {
@@ -506,6 +548,11 @@ export async function syncOutcomesForRecordId(
           side: true,
           triggerText: true,
           entryText: true,
+          sample: {
+            select: {
+              settledAt: true,
+            },
+          },
         },
       },
     },
@@ -515,12 +562,26 @@ export async function syncOutcomesForRecordId(
     return [];
   }
 
-  const profile = getOutcomeProfile(record.recordType, timeframe);
-  const candles = await candleRepository.listCandles({
+  const candles = await candleRepository.listCandlesWithPreferredSource({
     symbol: record.symbol,
     timeframe,
-    limit: profile.windowCandles + 2,
     fromOpenTime: new Date(record.occurredAt.getTime() - getTimeframeMs(timeframe)),
+    preferredSource: "binance",
+  });
+  const executionPlans: OutcomePlan[] = record.executionPlans.flatMap((plan) => {
+    if (!isOutcomePlanSide(plan.side)) {
+      return [];
+    }
+
+    return [
+      {
+        id: plan.id,
+        side: plan.side,
+        triggerText: plan.triggerText,
+        entryText: plan.entryText,
+        sampleSettledAt: plan.sample?.settledAt ?? null,
+      },
+    ];
   });
   const computed = await syncRecordOutcomes({
     record: {
@@ -528,9 +589,7 @@ export async function syncOutcomesForRecordId(
       recordType: record.recordType,
       symbol: record.symbol,
       occurredAt: record.occurredAt,
-      executionPlans: record.executionPlans.filter((plan) =>
-        isOutcomePlanSide(plan.side),
-      ),
+      executionPlans,
     },
     timeframe,
     candles,

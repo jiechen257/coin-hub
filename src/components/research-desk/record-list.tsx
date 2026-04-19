@@ -1,14 +1,33 @@
 "use client";
 
-import type { ResearchDeskRecord } from "@/components/research-desk/research-desk-types";
+import { Archive } from "lucide-react";
+import { RecordEditorDialog } from "@/components/research-desk/record-editor-dialog";
+import type {
+  ResearchDeskRecord,
+  ResearchDeskTrader,
+} from "@/components/research-desk/research-desk-types";
+import type {
+  CreateRecordRequest,
+  UpdateRecordRequest,
+} from "@/components/research-desk/record-form";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 type RecordListProps = {
+  traders: ResearchDeskTrader[];
   records: ResearchDeskRecord[];
   selectedRecordId: string | null;
   onSelect: (recordId: string) => void;
+  onCreateTrader: (input: {
+    name: string;
+    platform?: string;
+    notes?: string;
+  }) => Promise<ResearchDeskTrader>;
+  onCreateRecord: (input: CreateRecordRequest) => Promise<void>;
+  onUpdateRecord: (recordId: string, input: UpdateRecordRequest) => Promise<void>;
+  onArchiveRecord: (recordId: string) => Promise<void>;
 };
 
 function formatOccurredAt(value: string) {
@@ -29,9 +48,14 @@ function getRecordPreview(record: ResearchDeskRecord) {
 }
 
 export function RecordList({
+  traders,
   records,
   selectedRecordId,
   onSelect,
+  onCreateTrader,
+  onCreateRecord,
+  onUpdateRecord,
+  onArchiveRecord,
 }: RecordListProps) {
   return (
     <Card>
@@ -50,35 +74,68 @@ export function RecordList({
           const active = record.id === selectedRecordId;
 
           return (
-            <button
+            <div
               key={record.id}
-              type="button"
-              onClick={() => onSelect(record.id)}
               className={cn(
-                "group grid w-full gap-2 rounded-md border px-4 py-3 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:outline-none",
+                "grid gap-2 rounded-md border px-4 py-3 transition-colors",
                 active
                   ? "border-primary/30 bg-primary/10"
                   : "border-border/80 bg-secondary/30 hover:border-primary/25 hover:bg-accent/70",
               )}
             >
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-foreground">
-                  {record.trader.name}
-                </span>
-                <Badge variant={active ? "success" : "outline"}>
-                  {record.symbol} · {record.recordType}
-                </Badge>
-              </div>
+                <button
+                  type="button"
+                  onClick={() => onSelect(record.id)}
+                  className="grid min-w-0 flex-1 gap-2 text-left focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:outline-none"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-foreground">
+                      {record.trader.name}
+                    </span>
+                    <Badge variant={active ? "success" : "outline"}>
+                      {record.symbol} · {record.recordType}
+                    </Badge>
+                  </div>
 
-              <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">
-                {getRecordPreview(record)}
-              </p>
+                  <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">
+                    {getRecordPreview(record)}
+                  </p>
 
-              <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                <span>{formatOccurredAt(record.occurredAt)}</span>
-                <span>{record.executionPlans.length} 个方案</span>
+                  <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                    <span>{formatOccurredAt(record.occurredAt)}</span>
+                    <span>{record.executionPlans.length} 个方案</span>
+                  </div>
+                </button>
+
+                <div className="flex items-center gap-1">
+                  <RecordEditorDialog
+                    record={record}
+                    traders={traders}
+                    onCreateTrader={onCreateTrader}
+                    onCreateRecord={onCreateRecord}
+                    onUpdateRecord={onUpdateRecord}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={async (event) => {
+                      event.stopPropagation();
+
+                      if (!window.confirm("存档后这条记录将不再出现在工作台里，继续吗？")) {
+                        return;
+                      }
+
+                      await onArchiveRecord(record.id);
+                    }}
+                  >
+                    <Archive className="h-4 w-4" />
+                    存档
+                  </Button>
+                </div>
               </div>
-            </button>
+            </div>
           );
         })}
       </CardContent>

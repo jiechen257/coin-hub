@@ -3,6 +3,14 @@ export type ResearchDeskTimeframe = "15m" | "1h" | "4h" | "1d";
 export type ResearchDeskOutcomeResultLabel = "good" | "neutral" | "bad" | "pending";
 export type ResearchDeskOutcomeSubjectType = "record" | "plan";
 export type ResearchDeskReviewTagKind = "preset" | "custom";
+export type ResearchDeskResultFilter = "all" | "good" | "neutral" | "bad";
+export type ResearchDeskReviewTagFilter = string | null;
+export type ResearchDeskSourceType =
+  | "manual"
+  | "twitter"
+  | "telegram"
+  | "discord"
+  | "custom-import";
 
 export type ResearchDeskOutcome = {
   id: string;
@@ -90,7 +98,7 @@ export type ResearchDeskRecord = {
   symbol: ResearchDeskSymbol;
   timeframe: string | null;
   recordType: "trade" | "view";
-  sourceType: string;
+  sourceType: ResearchDeskSourceType;
   occurredAt: string;
   rawContent: string;
   notes: string | null;
@@ -142,10 +150,7 @@ export type ResearchDeskSelection = {
 };
 
 export type ResearchDeskChartSlicePayload = {
-  selection: {
-    symbol: ResearchDeskSymbol;
-    timeframe: ResearchDeskTimeframe;
-  };
+  selection: ResearchDeskSelection;
   selectedOutcomeId: string | null;
   reviewTagOptions: ResearchDeskReviewTagOption[];
   summary: ResearchDeskOutcomeAggregates;

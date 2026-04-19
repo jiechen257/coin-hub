@@ -1,26 +1,45 @@
 "use client";
 
-import { Eye, EyeOff, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
-import { PriceChart } from "@/components/analysis/price-chart";
+import { useMemo, useRef, useState } from "react";
+import { ResearchDeskFirstScreen } from "@/components/research-desk/research-desk-first-screen";
 import {
-  type ResearchDeskPayload,
-  type ResearchDeskRecord,
-  type ResearchDeskTrader,
+  buildOutcomeAggregates,
+  findRecordForOutcome,
+  filterOutcomes,
+  findOutcomeForRecord,
+  hasReviewTagOption,
+  resolveOutcomeId,
+} from "@/components/research-desk/research-desk-filtering";
+import { ResearchDeskSecondaryWorkspace } from "@/components/research-desk/research-desk-secondary-workspace";
+import type {
+  ResearchDeskChartSlicePayload,
+  ResearchDeskPayload,
+  ResearchDeskRecord,
+  ResearchDeskResultFilter,
+  ResearchDeskReviewTagFilter,
+  ResearchDeskSelection,
+  ResearchDeskTrader,
 } from "@/components/research-desk/research-desk-types";
-import {
-  type CreateRecordRequest,
+import type {
+  CreateRecordRequest,
+  UpdateRecordRequest,
 } from "@/components/research-desk/record-form";
-import { RecordComposerDialog } from "@/components/research-desk/record-composer-dialog";
-import { RecordList } from "@/components/research-desk/record-list";
-import { RecordDetail } from "@/components/research-desk/record-detail";
-import { StrategyCandidateList } from "@/components/research-desk/strategy-candidate-list";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 
 type ResearchDeskProps = {
   initialData: ResearchDeskPayload;
+};
+
+type ResearchDeskChartState = Pick<
+  ResearchDeskChartSlicePayload,
+  "reviewTagOptions" | "summary" | "chart"
+>;
+
+type DetailMode = "record" | "outcome";
+
+type ChartRefreshOptions = {
+  preferredOutcomeId?: string | null;
+  preferredRecordId?: string | null;
+  allowFallbackOutcome?: boolean;
 };
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -34,32 +53,201 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
+function buildChartRequestUrl(selection: ResearchDeskSelection) {
+  const query = new URLSearchParams(selection);
+  return `/api/research-desk/chart?${query.toString()}`;
+}
+
+function isSameSelection(
+  left: ResearchDeskSelection,
+  right: ResearchDeskSelection,
+) {
+  return left.symbol === right.symbol && left.timeframe === right.timeframe;
+}
+
 export function ResearchDesk({ initialData }: ResearchDeskProps) {
   const [traders, setTraders] = useState(initialData.traders);
   const [records, setRecords] = useState(initialData.records);
   const [selectedRecordId, setSelectedRecordId] = useState(
     initialData.selectedRecordId,
   );
+  const [selectedOutcomeId, setSelectedOutcomeId] = useState(
+    initialData.selectedOutcomeId,
+  );
+  const [detailMode, setDetailMode] = useState<DetailMode>(
+    initialData.selectedOutcomeId ? "outcome" : "record",
+  );
   const [candidates, setCandidates] = useState(initialData.candidates);
   const [candidateMessage, setCandidateMessage] = useState<string | null>(null);
   const [candidateError, setCandidateError] = useState<string | null>(null);
   const [isRegeneratingCandidates, setIsRegeneratingCandidates] = useState(false);
-  const [showEthChart, setShowEthChart] = useState(true);
+  const [selection, setSelection] = useState(initialData.selection);
+  const [chartState, setChartState] = useState<ResearchDeskChartState>({
+    reviewTagOptions: initialData.reviewTagOptions,
+    summary: initialData.summary,
+    chart: initialData.chart,
+  });
+  const [resultFilter, setResultFilter] =
+    useState<ResearchDeskResultFilter>("all");
+  const [reviewTagFilter, setReviewTagFilter] =
+    useState<ResearchDeskReviewTagFilter>(null);
+  const [isChartLoading, setIsChartLoading] = useState(false);
+  const [chartError, setChartError] = useState<string | null>(null);
+  const chartRequestIdRef = useRef(0);
 
-  const selectedRecord = useMemo(
+  const filteredOutcomes = useMemo(
     () =>
-      records.find((record) => record.id === selectedRecordId) ??
-      records[0] ??
-      null,
-    [records, selectedRecordId],
+      filterOutcomes(chartState.chart.outcomes, {
+        resultFilter,
+        reviewTagFilter,
+      }),
+    [chartState.chart.outcomes, resultFilter, reviewTagFilter],
   );
+  const filteredSummary = useMemo(
+    () => buildOutcomeAggregates(filteredOutcomes),
+    [filteredOutcomes],
+  );
+  const selectedOutcome = useMemo(
+    () =>
+      chartState.chart.outcomes.find((outcome) => outcome.id === selectedOutcomeId) ??
+      null,
+    [chartState.chart.outcomes, selectedOutcomeId],
+  );
+  const selectedRecord = useMemo(() => {
+    const explicitRecord =
+      records.find((record) => record.id === selectedRecordId) ?? null;
+
+    if (detailMode === "record") {
+      return explicitRecord ?? records[0] ?? null;
+    }
+
+    if (selectedOutcome) {
+      return findRecordForOutcome(records, selectedOutcome);
+    }
+
+    return null;
+  }, [detailMode, records, selectedOutcome, selectedRecordId]);
+
+  function syncLocalSelection(
+    nextResultFilter: ResearchDeskResultFilter,
+    nextReviewTagFilter: ResearchDeskReviewTagFilter,
+  ) {
+    const nextFilteredOutcomes = filterOutcomes(chartState.chart.outcomes, {
+      resultFilter: nextResultFilter,
+      reviewTagFilter: nextReviewTagFilter,
+    });
+    const nextOutcomeId = resolveOutcomeId(nextFilteredOutcomes, {
+      preferredOutcomeId: selectedOutcomeId,
+      preferredRecordId: selectedRecordId,
+      allowFirstOutcomeFallback: true,
+    });
+    const nextOutcome =
+      chartState.chart.outcomes.find((outcome) => outcome.id === nextOutcomeId) ??
+      null;
+
+    setSelectedOutcomeId(nextOutcomeId);
+
+    if (nextOutcome) {
+      const nextRecord = findRecordForOutcome(records, nextOutcome);
+
+      setDetailMode("outcome");
+      setSelectedRecordId(nextRecord?.id ?? null);
+
+      return;
+    }
+
+    setDetailMode("record");
+  }
+
+  async function refreshChartSlice(
+    nextSelection: ResearchDeskSelection,
+    options: ChartRefreshOptions = {},
+  ) {
+    const requestId = chartRequestIdRef.current + 1;
+    chartRequestIdRef.current = requestId;
+    setIsChartLoading(true);
+    setChartError(null);
+
+    try {
+      const payload = await parseResponse<ResearchDeskChartSlicePayload>(
+        await fetch(buildChartRequestUrl(nextSelection), {
+          cache: "no-store",
+        }),
+      );
+
+      if (chartRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      const nextReviewTagFilter = hasReviewTagOption(
+        reviewTagFilter,
+        payload.reviewTagOptions,
+      )
+        ? reviewTagFilter
+        : null;
+      const nextFilteredOutcomes = filterOutcomes(payload.chart.outcomes, {
+        resultFilter,
+        reviewTagFilter: nextReviewTagFilter,
+      });
+      const nextOutcomeId = resolveOutcomeId(nextFilteredOutcomes, {
+        preferredOutcomeId: options.preferredOutcomeId,
+        preferredRecordId: options.preferredRecordId ?? selectedRecordId,
+        fallbackOutcomeId: options.allowFallbackOutcome
+          ? payload.selectedOutcomeId
+          : null,
+        allowFirstOutcomeFallback: options.allowFallbackOutcome ?? true,
+      });
+      const nextOutcome =
+        payload.chart.outcomes.find((outcome) => outcome.id === nextOutcomeId) ??
+        null;
+      const nextRecord = findRecordForOutcome(records, nextOutcome);
+
+      setSelection(payload.selection);
+      setChartState({
+        reviewTagOptions: payload.reviewTagOptions,
+        summary: payload.summary,
+        chart: payload.chart,
+      });
+      setReviewTagFilter(nextReviewTagFilter);
+      setSelectedOutcomeId(nextOutcomeId);
+
+      if (nextOutcome) {
+        setDetailMode("outcome");
+        setSelectedRecordId(nextRecord?.id ?? null);
+
+        return;
+      }
+
+      setDetailMode("record");
+
+      if (options.preferredRecordId) {
+        setSelectedRecordId(options.preferredRecordId);
+      }
+    } catch (error) {
+      if (chartRequestIdRef.current === requestId) {
+        setChartError(error instanceof Error ? error.message : "研究图切片加载失败");
+      }
+    } finally {
+      if (chartRequestIdRef.current === requestId) {
+        setIsChartLoading(false);
+      }
+    }
+  }
 
   async function refreshRecords() {
     const payload = await parseResponse<{ records: ResearchDeskRecord[] }>(
       await fetch("/api/trader-records", { cache: "no-store" }),
     );
     setRecords(payload.records);
-    setSelectedRecordId((current) => current ?? payload.records[0]?.id ?? null);
+    return payload.records;
+  }
+
+  async function refreshCandidates() {
+    const payload = await parseResponse<{ candidates: typeof initialData.candidates }>(
+      await fetch("/api/strategy-candidates", { cache: "no-store" }),
+    );
+    setCandidates(payload.candidates);
+    return payload.candidates;
   }
 
   async function handleCreateTrader(input: {
@@ -95,6 +283,60 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
 
     setRecords((current) => [payload.record, ...current]);
     setSelectedRecordId(payload.record.id);
+    setSelectedOutcomeId(null);
+    setDetailMode("record");
+
+    await refreshChartSlice(selection, {
+      preferredRecordId: payload.record.id,
+      allowFallbackOutcome: false,
+    });
+  }
+
+  async function handleUpdateRecord(recordId: string, input: UpdateRecordRequest) {
+    const payload = await parseResponse<{ record: ResearchDeskRecord }>(
+      await fetch(`/api/trader-records/${recordId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      }),
+    );
+
+    await refreshRecords();
+    setSelectedRecordId(payload.record.id);
+    setDetailMode("record");
+    await Promise.all([
+      refreshChartSlice(selection, {
+        preferredRecordId: payload.record.id,
+        allowFallbackOutcome: true,
+      }),
+      refreshCandidates(),
+    ]);
+  }
+
+  async function handleArchiveRecord(recordId: string) {
+    await parseResponse<{ record: { id: string } }>(
+      await fetch(`/api/trader-records/${recordId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "archive" }),
+      }),
+    );
+
+    const nextRecords = await refreshRecords();
+    const nextSelectedRecordId = nextRecords[0]?.id ?? null;
+    await Promise.all([
+      refreshChartSlice(selection, {
+        preferredRecordId: nextSelectedRecordId,
+        allowFallbackOutcome: true,
+      }),
+      refreshCandidates(),
+    ]);
+
+    if (!nextSelectedRecordId) {
+      setSelectedRecordId(null);
+      setSelectedOutcomeId(null);
+      setDetailMode("record");
+    }
   }
 
   async function handleSettlePlan(input: {
@@ -115,6 +357,11 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
     );
 
     await refreshRecords();
+    await refreshChartSlice(selection, {
+      preferredOutcomeId: selectedOutcomeId,
+      preferredRecordId: selectedRecordId,
+      allowFallbackOutcome: true,
+    });
   }
 
   async function handleRegenerateCandidates() {
@@ -126,11 +373,7 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
       const payload = await parseResponse<{
         regenerated: number;
         candidates: typeof initialData.candidates;
-      }>(
-        await fetch("/api/strategy-candidates", {
-          method: "POST",
-        }),
-      );
+      }>(await fetch("/api/strategy-candidates", { method: "POST" }));
 
       setCandidates(payload.candidates);
       setCandidateMessage(`已归纳 ${payload.regenerated} 条候选策略`);
@@ -143,182 +386,103 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
     }
   }
 
+  async function handleSaveReviewTags(reviewTags: string[]) {
+    if (!selectedOutcome) {
+      return;
+    }
+
+    await parseResponse<{ outcome: { id: string } }>(
+      await fetch(`/api/record-outcomes/${selectedOutcome.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reviewTags }),
+      }),
+    );
+
+    await refreshChartSlice(selection, {
+      preferredOutcomeId: selectedOutcome.id,
+      preferredRecordId: selectedRecordId,
+      allowFallbackOutcome: true,
+    });
+  }
+
+  function handleSelectionChange(nextSelection: ResearchDeskSelection) {
+    if (!isSameSelection(selection, nextSelection)) {
+      void refreshChartSlice(nextSelection, {
+        preferredOutcomeId: selectedOutcomeId,
+        preferredRecordId: selectedRecordId,
+        allowFallbackOutcome: true,
+      });
+    }
+  }
+
+  function handleResultFilterChange(nextFilter: ResearchDeskResultFilter) {
+    setResultFilter(nextFilter);
+    syncLocalSelection(nextFilter, reviewTagFilter);
+  }
+
+  function handleReviewTagFilterChange(nextReviewTagFilter: ResearchDeskReviewTagFilter) {
+    setReviewTagFilter(nextReviewTagFilter);
+    syncLocalSelection(resultFilter, nextReviewTagFilter);
+  }
+
+  function handleSelectOutcome(outcomeId: string) {
+    const nextOutcome = chartState.chart.outcomes.find(
+      (outcome) => outcome.id === outcomeId,
+    );
+    const nextRecord = findRecordForOutcome(records, nextOutcome ?? null);
+
+    setSelectedOutcomeId(outcomeId);
+    setDetailMode("outcome");
+    setSelectedRecordId(nextRecord?.id ?? null);
+  }
+
+  function handleSelectRecord(recordId: string) {
+    const matchedOutcome = findOutcomeForRecord(filteredOutcomes, recordId);
+
+    setSelectedRecordId(recordId);
+    setSelectedOutcomeId(matchedOutcome?.id ?? null);
+    setDetailMode("record");
+  }
+
   return (
-    <section className="grid gap-6">
-      <Card className="overflow-hidden">
-        <CardContent className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div className="space-y-3">
-            <Badge variant="outline" className="w-fit uppercase tracking-[0.28em]">
-              Coin Hub
-            </Badge>
+    <section className="grid gap-8">
+      <ResearchDeskFirstScreen
+        selection={selection}
+        resultFilter={resultFilter}
+        reviewTagFilter={reviewTagFilter}
+        reviewTagOptions={chartState.reviewTagOptions}
+        filteredOutcomes={filteredOutcomes}
+        filteredSummary={filteredSummary}
+        selectedOutcome={selectedOutcome}
+        selectedRecord={selectedRecord}
+        records={records}
+        chartCandles={chartState.chart.candles}
+        chartError={chartError}
+        isChartLoading={isChartLoading}
+        onSelectionChange={handleSelectionChange}
+        onResultFilterChange={handleResultFilterChange}
+        onReviewTagFilterChange={handleReviewTagFilterChange}
+        onSelectOutcome={handleSelectOutcome}
+        onSaveReviewTags={handleSaveReviewTags}
+        onSettlePlan={handleSettlePlan}
+      />
 
-            <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                交易员策略研究台
-              </h1>
-              <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-                在一个工作台里管理交易员记录、观察 BTC / ETH K 线、结算样本并归纳候选策略。
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
-              <span>交互组件已切到 shadcn 语义层，主题色支持变量插槽覆盖。</span>
-            </div>
-          </div>
-
-          <div className="max-w-[320px] rounded-md border border-border/80 bg-secondary/20 px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
-              图表交互
-            </p>
-            <p className="mt-2 text-sm font-medium text-foreground">
-              左侧双图观察，右侧集中录入与查看
-            </p>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              默认打开 Binance BTCUSDT 永续合约和 ETHUSDT 永续合约，ETH 图支持收起，手机上按纵向顺序浏览。
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="grid gap-4">
-          <Card>
-            <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
-                  双图工作区
-                </p>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  BTC 主图常驻上方，ETH 辅图常驻下方；两张图都能各自切换周期。
-                </p>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowEthChart((current) => !current)}
-                aria-expanded={showEthChart}
-              >
-                {showEthChart ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                {showEthChart ? "收起 ETH 图" : "展开 ETH 图"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          <PriceChart
-            symbol={initialData.selection.symbol}
-            timeframe={initialData.selection.timeframe}
-            title="BTC 主图"
-            description="默认 1h 永续合约视图，图内支持继续切周期与品种"
-            height="clamp(320px, 68vw, 500px)"
-          />
-
-          {showEthChart ? (
-            <PriceChart
-              symbol="ETH"
-              timeframe="1h"
-              title="ETH 辅图"
-              description="默认 1h 永续合约视图，适合与 BTC 同屏对照"
-              height="clamp(260px, 52vw, 380px)"
-            />
-          ) : (
-            <Card>
-              <CardContent className="flex items-center justify-between gap-3 p-5">
-                <div>
-                  <p className="text-sm font-medium text-foreground">ETH 辅图已收起</p>
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    需要对照时展开，手机上浏览会更轻。
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowEthChart(true)}
-                >
-                  <Eye className="h-4 w-4" />
-                  展开
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        <div className="grid gap-6">
-          <Card>
-            <CardContent className="grid gap-5 p-5">
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
-                  工作台操作
-                </p>
-                <div className="space-y-1">
-                  <h2 className="text-lg font-semibold tracking-tight text-foreground">
-                    右侧录入与浏览
-                  </h2>
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    录入动作、记录列表、详情和候选策略都收进这一列，手机上会排成连续区块。
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-3 grid-cols-3">
-                <div className="rounded-md border border-border/80 bg-secondary/20 p-3">
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    交易员
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-foreground">
-                    {traders.length}
-                  </p>
-                </div>
-                <div className="rounded-md border border-border/80 bg-secondary/20 p-3">
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    记录
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-foreground">
-                    {records.length}
-                  </p>
-                </div>
-                <div className="rounded-md border border-border/80 bg-secondary/20 p-3">
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    候选策略
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-foreground">
-                    {candidates.length}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <RecordComposerDialog
-                  traders={traders}
-                  onCreateTrader={handleCreateTrader}
-                  onCreateRecord={handleCreateRecord}
-                />
-                <p className="text-xs leading-5 text-muted-foreground">
-                  新建后会自动选中刚创建的记录，详情区立即跟进。
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <RecordList
-            records={records}
-            selectedRecordId={selectedRecord?.id ?? null}
-            onSelect={setSelectedRecordId}
-          />
-
-          <RecordDetail record={selectedRecord} onSettlePlan={handleSettlePlan} />
-          <StrategyCandidateList
-            candidates={candidates}
-            onRegenerate={handleRegenerateCandidates}
-            isLoading={isRegeneratingCandidates}
-            message={candidateMessage}
-            error={candidateError}
-          />
-        </div>
-      </div>
+      <ResearchDeskSecondaryWorkspace
+        traders={traders}
+        records={records}
+        selectedRecordId={selectedRecord?.id ?? null}
+        candidates={candidates}
+        candidateMessage={candidateMessage}
+        candidateError={candidateError}
+        isRegeneratingCandidates={isRegeneratingCandidates}
+        onCreateTrader={handleCreateTrader}
+        onCreateRecord={handleCreateRecord}
+        onUpdateRecord={handleUpdateRecord}
+        onArchiveRecord={handleArchiveRecord}
+        onSelectRecord={handleSelectRecord}
+        onRegenerateCandidates={handleRegenerateCandidates}
+      />
     </section>
   );
 }

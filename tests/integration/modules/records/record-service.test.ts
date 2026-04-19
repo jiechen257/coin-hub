@@ -1,8 +1,12 @@
 // @vitest-environment node
 
+process.env.DATABASE_URL = "file:./prisma/test.db";
+process.env.LOCAL_DATABASE_URL = "file:./prisma/test.db";
 process.env.TURSO_DATABASE_URL = "";
 process.env.TURSO_AUTH_TOKEN = "";
 
+const { GET: getTraderRecordsRoute } = await import("@/app/api/trader-records/route");
+const { PATCH: patchTraderRecordRoute } = await import("@/app/api/trader-records/[recordId]/route");
 const { POST: postTraderRecordsRoute } = await import("@/app/api/trader-records/route");
 const { POST: postTradersRoute } = await import("@/app/api/traders/route");
 const { db } = await import("@/lib/db");
@@ -23,6 +27,14 @@ async function expectInputError(input: unknown, path: string) {
 function createJsonRequest(url: string, body: unknown) {
   return new Request(url, {
     method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+function createPatchRequest(url: string, body: unknown) {
+  return new Request(url, {
+    method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -341,5 +353,98 @@ describe("record-service", () => {
     };
     expect(payload.error).toBe("Invalid trader record payload");
     expect(payload.details.some((detail) => detail.path === "trade")).toBe(true);
+  });
+
+  it("updates a record through /api/trader-records/[recordId]", async () => {
+    const trader = await db.traderProfile.create({ data: { name: "Trader Update" } });
+    const created = await createRecordFromInput({
+      traderId: trader.id,
+      symbol: "BTC",
+      recordType: "view",
+      sourceType: "manual",
+      occurredAt: "2026-04-16T13:00:00.000Z",
+      rawContent: "原始观点",
+      plans: [
+        {
+          label: "plan-a",
+          side: "long",
+          triggerText: "原始触发",
+          entryText: "原始入场",
+        },
+      ],
+    });
+
+    const response = await patchTraderRecordRoute(
+      createPatchRequest(`http://localhost/api/trader-records/${created.id}`, {
+        traderId: trader.id,
+        symbol: "ETH",
+        recordType: "view",
+        sourceType: "manual",
+        occurredAt: "2026-04-16T13:30:00.000Z",
+        rawContent: "更新后的观点",
+        plans: [
+          {
+            id: created.executionPlans[0]?.id,
+            label: "plan-a",
+            side: "short",
+            triggerText: "更新触发",
+            entryText: "更新入场",
+          },
+        ],
+      }),
+      { params: Promise.resolve({ recordId: created.id }) },
+    );
+
+    expect(response.status).toBe(200);
+
+    const payload = (await response.json()) as {
+      record: {
+        symbol: string;
+        rawContent: string;
+        executionPlans: Array<{ side: string; triggerText: string }>;
+      };
+    };
+    expect(payload.record.symbol).toBe("ETH");
+    expect(payload.record.rawContent).toBe("更新后的观点");
+    expect(payload.record.executionPlans[0]).toMatchObject({
+      side: "short",
+      triggerText: "更新触发",
+    });
+  });
+
+  it("archives records through /api/trader-records/[recordId] and hides them from listing", async () => {
+    const trader = await db.traderProfile.create({ data: { name: "Trader Archive" } });
+    const created = await createRecordFromInput({
+      traderId: trader.id,
+      symbol: "BTC",
+      recordType: "view",
+      sourceType: "manual",
+      occurredAt: "2026-04-16T14:00:00.000Z",
+      rawContent: "要被存档的记录",
+      plans: [
+        {
+          label: "plan-a",
+          side: "long",
+          triggerText: "触发",
+          entryText: "入场",
+        },
+      ],
+    });
+
+    const archiveResponse = await patchTraderRecordRoute(
+      createPatchRequest(`http://localhost/api/trader-records/${created.id}`, {
+        action: "archive",
+      }),
+      { params: Promise.resolve({ recordId: created.id }) },
+    );
+
+    expect(archiveResponse.status).toBe(200);
+
+    const listResponse = await getTraderRecordsRoute();
+    const listPayload = (await listResponse.json()) as {
+      records: Array<{ id: string }>;
+    };
+
+    expect(listPayload.records.some((record) => record.id === created.id)).toBe(false);
   });
 });

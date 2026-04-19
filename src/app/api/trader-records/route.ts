@@ -21,6 +21,9 @@ function buildBadRequestResponse(error: ZodError | SyntaxError) {
 
 export async function GET() {
   const records = await db.traderRecord.findMany({
+    where: {
+      archivedAt: null,
+    },
     include: { trader: true, executionPlans: { include: { sample: true } } },
     orderBy: { occurredAt: "desc" },
   });

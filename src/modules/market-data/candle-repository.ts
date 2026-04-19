@@ -10,6 +10,7 @@ export type ListCandlesInput = {
   timeframe: CandleTimeframe;
   limit?: number;
   fromOpenTime?: Date;
+  source?: string;
 };
 
 export type CandleRepository = {
@@ -20,6 +21,13 @@ export type CandleRepository = {
     source?: string;
   }): Promise<StoreCandlesResult>;
   listCandles(input: ListCandlesInput): ReturnType<typeof listCandles>;
+  listCandlesWithPreferredSource(input: {
+    symbol: string;
+    timeframe: CandleTimeframe;
+    limit?: number;
+    fromOpenTime?: Date;
+    preferredSource: string;
+  }): ReturnType<typeof listCandlesWithPreferredSource>;
 };
 
 const DEFAULT_CANDLE_LIMIT = 500;
@@ -30,6 +38,11 @@ export async function listCandles(input: ListCandlesInput) {
     where: {
       symbol: input.symbol,
       timeframe: input.timeframe,
+      ...(input.source
+        ? {
+            source: input.source,
+          }
+        : {}),
       ...(input.fromOpenTime
         ? {
             openTime: {
@@ -45,6 +58,33 @@ export async function listCandles(input: ListCandlesInput) {
   });
 
   return orderDirection === "desc" ? candles.reverse() : candles;
+}
+
+export async function listCandlesWithPreferredSource(input: {
+  symbol: string;
+  timeframe: CandleTimeframe;
+  limit?: number;
+  fromOpenTime?: Date;
+  preferredSource: string;
+}) {
+  const preferredCandles = await listCandles({
+    symbol: input.symbol,
+    timeframe: input.timeframe,
+    limit: input.limit,
+    fromOpenTime: input.fromOpenTime,
+    source: input.preferredSource,
+  });
+
+  if (preferredCandles.length > 0) {
+    return preferredCandles;
+  }
+
+  return listCandles({
+    symbol: input.symbol,
+    timeframe: input.timeframe,
+    limit: input.limit,
+    fromOpenTime: input.fromOpenTime,
+  });
 }
 
 export async function storeCandles(input: {
@@ -101,4 +141,5 @@ export async function storeCandles(input: {
 export const candleRepository: CandleRepository = {
   storeCandles,
   listCandles,
+  listCandlesWithPreferredSource,
 };

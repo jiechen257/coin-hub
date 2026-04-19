@@ -30,6 +30,15 @@ type SliceOutcome = Awaited<
   >
 >[number];
 
+type SliceCandle = {
+  openTime: Date;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number | null;
+};
+
 function prepareResearchDeskLoaderEnv() {
   if (process.env.VITEST) {
     process.env.TURSO_DATABASE_URL = "";
@@ -40,15 +49,59 @@ function prepareResearchDeskLoaderEnv() {
 async function loadSliceDependencies() {
   prepareResearchDeskLoaderEnv();
 
-  const [{ candleRepository }, { outcomeRepository }] = await Promise.all([
+  const [
+    { db },
+    { candleRepository },
+    { createBinanceClient },
+    { normalizeCandles },
+    { outcomeRepository },
+    { fetchAndStoreCandles },
+    { syncOutcomesForRecordId },
+  ] = await Promise.all([
+    import("@/lib/db"),
     import("@/modules/market-data/candle-repository"),
+    import("@/modules/market-data/binance-client"),
+    import("@/modules/market-data/normalize-candles"),
     import("@/modules/outcomes/outcome-repository"),
+    import("@/modules/market-data/fetch-and-store-candles"),
+    import("@/modules/outcomes/outcome-service"),
   ]);
 
   return {
+    db,
     candleRepository,
+    createBinanceClient,
+    normalizeCandles,
     outcomeRepository,
+    fetchAndStoreCandles,
+    syncOutcomesForRecordId,
   };
+}
+
+function formatRefreshError(error: unknown) {
+  return error instanceof Error ? error.message : "unknown fetch error";
+}
+
+function shouldUseTransientCandles() {
+  return Boolean(process.env.VERCEL) && !process.env.VITEST;
+}
+
+async function loadTransientBinanceCandles(input: {
+  symbol: ResearchDeskSymbol;
+  timeframe: ResearchDeskTimeframe;
+  createBinanceClient: Awaited<
+    typeof import("@/modules/market-data/binance-client")
+  >["createBinanceClient"];
+  normalizeCandles: Awaited<
+    typeof import("@/modules/market-data/normalize-candles")
+  >["normalizeCandles"];
+}): Promise<SliceCandle[]> {
+  const client = input.createBinanceClient();
+  const rawCandles = await client.fetchCandles(input.symbol, input.timeframe);
+  return input.normalizeCandles(rawCandles).map((candle) => ({
+    ...candle,
+    volume: candle.volume ?? null,
+  }));
 }
 
 function compareReviewTagLabels(left: string, right: string) {
@@ -162,17 +215,95 @@ export async function loadResearchDeskChartSlice(input: {
   symbol: ResearchDeskSymbol;
   timeframe: ResearchDeskTimeframe;
 }): Promise<ResearchDeskChartSlicePayload> {
-  const { candleRepository, outcomeRepository } = await loadSliceDependencies();
-  const [candles, outcomes] = await Promise.all([
-    candleRepository.listCandles({
+  const {
+    db,
+    candleRepository,
+    createBinanceClient,
+    normalizeCandles,
+    outcomeRepository,
+    fetchAndStoreCandles,
+    syncOutcomesForRecordId,
+  } = await loadSliceDependencies();
+  const useTransientCandles = shouldUseTransientCandles();
+  let candles: SliceCandle[] = [];
+  let outcomes: SliceOutcome[] = [];
+
+  if (useTransientCandles) {
+    try {
+      candles = await loadTransientBinanceCandles({
+        symbol: input.symbol,
+        timeframe: input.timeframe,
+        createBinanceClient,
+        normalizeCandles,
+      });
+    } catch (error) {
+      console.warn(
+        `[research-desk] failed to load transient ${input.symbol} ${input.timeframe} candles: ${formatRefreshError(error)}`,
+      );
+    }
+  } else if (!process.env.VITEST) {
+    try {
+      await fetchAndStoreCandles([input.symbol], {
+        repository: candleRepository,
+        timeframes: [input.timeframe],
+      });
+    } catch (error) {
+      console.warn(
+        `[research-desk] failed to refresh ${input.symbol} ${input.timeframe} candles: ${formatRefreshError(error)}`,
+      );
+    }
+  }
+
+  try {
+    const records = await db.traderRecord.findMany({
+      where: {
+        symbol: input.symbol,
+        archivedAt: null,
+        OR: [{ timeframe: input.timeframe }, { timeframe: null }],
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!useTransientCandles) {
+      await Promise.all(
+        records.map(async (record) => {
+          try {
+            await syncOutcomesForRecordId(record.id, input.timeframe);
+          } catch (error) {
+            console.warn(
+              `[research-desk] failed to refresh outcome ${record.id} on ${input.symbol} ${input.timeframe}: ${formatRefreshError(error)}`,
+            );
+          }
+        }),
+      );
+    }
+
+    outcomes = await outcomeRepository.listSliceOutcomes({
       symbol: input.symbol,
       timeframe: input.timeframe,
-    }),
-    outcomeRepository.listSliceOutcomes({
-      symbol: input.symbol,
-      timeframe: input.timeframe,
-    }),
-  ]);
+    });
+  } catch (error) {
+    console.warn(
+      `[research-desk] failed to load db-backed slice data for ${input.symbol} ${input.timeframe}: ${formatRefreshError(error)}`,
+    );
+  }
+
+  if (candles.length === 0) {
+    try {
+      candles = await candleRepository.listCandlesWithPreferredSource({
+        symbol: input.symbol,
+        timeframe: input.timeframe,
+        preferredSource: "binance",
+      });
+    } catch (error) {
+      console.warn(
+        `[research-desk] failed to read cached ${input.symbol} ${input.timeframe} candles: ${formatRefreshError(error)}`,
+      );
+    }
+  }
+
   const serializedOutcomes = outcomes.map(serializeOutcome);
 
   return {

@@ -18,6 +18,12 @@ export const executionPlanInputSchema = z.object({
 });
 
 const tradeExecutionInputSchema = executionPlanInputSchema.omit({ label: true });
+const updateExecutionPlanInputSchema = executionPlanInputSchema.extend({
+  id: z.string().min(1).optional(),
+});
+const updateTradeExecutionInputSchema = tradeExecutionInputSchema.extend({
+  id: z.string().min(1).optional(),
+});
 
 const createRecordBaseSchema = {
   traderId: z.string().min(1),
@@ -55,4 +61,27 @@ const createViewRecordSchema = z
 export const createRecordSchema = z.discriminatedUnion("recordType", [
   createTradeRecordSchema,
   createViewRecordSchema,
+]);
+
+const updateTradeRecordSchema = z
+  .object({
+    ...createRecordBaseSchema,
+    recordType: z.literal("trade"),
+    trade: updateTradeExecutionInputSchema,
+    plans: z.array(updateExecutionPlanInputSchema).max(0).default([]),
+  })
+  .strict();
+
+const updateViewRecordSchema = z
+  .object({
+    ...createRecordBaseSchema,
+    recordType: z.literal("view"),
+    plans: z.array(updateExecutionPlanInputSchema).min(1),
+    trade: z.never().optional(),
+  })
+  .strict();
+
+export const updateRecordSchema = z.discriminatedUnion("recordType", [
+  updateTradeRecordSchema,
+  updateViewRecordSchema,
 ]);

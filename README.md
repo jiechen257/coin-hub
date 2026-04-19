@@ -1,6 +1,6 @@
 # Coin Hub
 
-Coin Hub 是一个本地交易员策略研究台。
+Coin Hub 是一个本地交易员策略研究台。首页优先展示记录 K 线图工作台，本地研究图负责 outcome 复盘，TradingView 保留为次级参考位。
 
 ## 环境要求
 
@@ -17,10 +17,24 @@ Coin Hub 是一个本地交易员策略研究台。
 
 打开 [http://localhost:3000](http://localhost:3000)，在同一个页面里完成：
 
-- 新增交易员
-- 录入真实开单或行情观点
-- 结算执行方案样本
-- 归纳候选策略
+- 首屏查看记录 K 线图工作台、本地研究图和 outcome 轨道
+- 用 TradingView 次级参考位补充行情细节核对
+- 在次级工作区里新增交易员、录入真实开单或行情观点
+- 给 outcome 打 review tag，并按 good / neutral / bad 与 review tag 回看结果
+- 结算执行方案样本并归纳候选策略
+
+## 首屏工作流
+
+首页默认进入记录 K 线图工作台，研究流程按这个顺序展开：
+
+1. 先看本地研究图、Outcome 总览和 Outcome 详情
+2. 用 TradingView 参考视图核对原生行情细节
+3. 在次级工作区新建记录、切换最近样本、继续结算和策略归纳
+
+研究图控制条支持两类回看：
+
+- `good / neutral / bad` 结果过滤
+- `review tag` 标签过滤
 
 ## 常用命令
 

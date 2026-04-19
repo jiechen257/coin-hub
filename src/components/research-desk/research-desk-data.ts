@@ -2,6 +2,7 @@ import type {
   ResearchDeskPayload,
   ResearchDeskPlan,
   ResearchDeskRecord,
+  ResearchDeskSourceType,
   ResearchDeskTrader,
 } from "@/components/research-desk/research-desk-types";
 import {
@@ -23,6 +24,34 @@ async function getResearchDeskDb() {
   prepareResearchDeskLoaderEnv();
   const { db } = await import("@/lib/db");
   return db;
+}
+
+function formatResearchDeskLoadError(error: unknown) {
+  return error instanceof Error ? error.message : "unknown load error";
+}
+
+function normalizeSourceType(input: string): ResearchDeskSourceType {
+  switch (input) {
+    case "twitter":
+    case "telegram":
+    case "discord":
+    case "custom-import":
+      return input;
+    default:
+      return "manual";
+  }
+}
+
+function buildEmptyResearchDeskPayload(
+  chartSlice: Awaited<ReturnType<typeof loadResearchDeskChartSlice>>,
+): ResearchDeskPayload {
+  return {
+    ...chartSlice,
+    traders: [],
+    records: [],
+    selectedRecordId: null,
+    candidates: [],
+  };
 }
 
 function serializeTrader(input: {
@@ -125,7 +154,7 @@ function serializeRecord(input: {
     symbol: input.symbol as ResearchDeskSymbol,
     timeframe: input.timeframe,
     recordType: input.recordType as "trade" | "view",
-    sourceType: input.sourceType,
+    sourceType: normalizeSourceType(input.sourceType),
     occurredAt: input.occurredAt.toISOString(),
     rawContent: input.rawContent,
     notes: input.notes,
@@ -160,56 +189,82 @@ export async function listSerializedStrategyCandidates() {
     take: 20,
   });
 
-  return candidates.map((candidate) => ({
-    id: candidate.id,
-    marketContext: candidate.marketContext,
-    triggerText: candidate.triggerText,
-    entryText: candidate.entryText,
-    riskText: candidate.riskText,
-    exitText: candidate.exitText,
-    sampleCount: candidate.sampleCount,
-    winRate: candidate.winRate,
-    sampleRefs: candidate.samples.map((link) => ({
-      sampleId: link.sample.id,
-      recordId: link.sample.plan.record.id,
-      traderName: link.sample.plan.record.trader.name,
-      rawContent: link.sample.plan.record.rawContent,
-    })),
-  }));
+  return candidates
+    .map((candidate) => {
+      const activeSamples = candidate.samples.filter(
+        (link) => link.sample.plan.record.archivedAt === null,
+      );
+
+      if (activeSamples.length === 0) {
+        return null;
+      }
+
+      return {
+        id: candidate.id,
+        marketContext: candidate.marketContext,
+        triggerText: candidate.triggerText,
+        entryText: candidate.entryText,
+        riskText: candidate.riskText,
+        exitText: candidate.exitText,
+        sampleCount: activeSamples.length,
+        winRate:
+          activeSamples.filter((link) => link.sample.resultTag === "win").length /
+          activeSamples.length,
+        sampleRefs: activeSamples.map((link) => ({
+          sampleId: link.sample.id,
+          recordId: link.sample.plan.record.id,
+          traderName: link.sample.plan.record.trader.name,
+          rawContent: link.sample.plan.record.rawContent,
+        })),
+      };
+    })
+    .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null);
 }
 
 export async function loadResearchDeskPayload(input: {
   symbol: ResearchDeskSymbol;
   timeframe: ResearchDeskTimeframe;
 }): Promise<ResearchDeskPayload> {
-  const db = await getResearchDeskDb();
-  const [traders, records, candidates, chartSlice] = await Promise.all([
-    db.traderProfile.findMany({
-      orderBy: { name: "asc" },
-    }),
-    db.traderRecord.findMany({
-      include: {
-        trader: true,
-        executionPlans: {
-          include: {
-            sample: true,
+  const chartSlice = await loadResearchDeskChartSlice(input);
+
+  try {
+    const db = await getResearchDeskDb();
+    const [traders, records, candidates] = await Promise.all([
+      db.traderProfile.findMany({
+        orderBy: { name: "asc" },
+      }),
+      db.traderRecord.findMany({
+        where: {
+          archivedAt: null,
+        },
+        include: {
+          trader: true,
+          executionPlans: {
+            include: {
+              sample: true,
+            },
           },
         },
-      },
-      orderBy: { occurredAt: "desc" },
-      take: 20,
-    }),
-    listSerializedStrategyCandidates(),
-    loadResearchDeskChartSlice(input),
-  ]);
+        orderBy: { occurredAt: "desc" },
+        take: 20,
+      }),
+      listSerializedStrategyCandidates(),
+    ]);
 
-  const serializedRecords = records.map(serializeRecord);
+    const serializedRecords = records.map(serializeRecord);
 
-  return {
-    ...chartSlice,
-    traders: traders.map(serializeTrader),
-    records: serializedRecords,
-    selectedRecordId: serializedRecords[0]?.id ?? null,
-    candidates,
-  };
+    return {
+      ...chartSlice,
+      traders: traders.map(serializeTrader),
+      records: serializedRecords,
+      selectedRecordId: serializedRecords[0]?.id ?? null,
+      candidates,
+    };
+  } catch (error) {
+    console.warn(
+      `[research-desk] falling back to empty db-backed payload: ${formatResearchDeskLoadError(error)}`,
+    );
+
+    return buildEmptyResearchDeskPayload(chartSlice);
+  }
 }

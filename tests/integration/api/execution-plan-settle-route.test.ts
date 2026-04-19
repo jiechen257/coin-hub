@@ -1,7 +1,10 @@
 // @vitest-environment node
 
-import { POST } from "@/app/api/execution-plans/[planId]/settle/route";
-import { db } from "@/lib/db";
+process.env.TURSO_DATABASE_URL = "";
+process.env.TURSO_AUTH_TOKEN = "";
+
+const { POST } = await import("@/app/api/execution-plans/[planId]/settle/route");
+const { db } = await import("@/lib/db");
 
 async function seedPlan() {
   const trader = await db.traderProfile.create({
@@ -87,7 +90,7 @@ describe("execution plan settle route", () => {
     await db.candle.deleteMany();
   });
 
-  it("settles one execution plan and updates its status", async () => {
+  it("settles one execution plan, updates its status, and refreshes outcome windows", async () => {
     const planId = await seedPlan();
 
     const response = await POST(
@@ -116,5 +119,18 @@ describe("execution plan settle route", () => {
 
     const plan = await db.executionPlan.findUniqueOrThrow({ where: { id: planId } });
     expect(plan.status).toBe("settled");
+
+    const outcomes = await db.recordOutcome.findMany({
+      orderBy: { windowStartAt: "asc" },
+    });
+
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]).toEqual(
+      expect.objectContaining({
+        symbol: "BTC",
+        timeframe: "1h",
+        windowEndAt: new Date("2026-04-16T10:00:00.000Z"),
+      }),
+    );
   });
 });

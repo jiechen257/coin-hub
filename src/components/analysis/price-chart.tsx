@@ -108,8 +108,8 @@ function buildSymbolLabel(symbol: ResearchDeskSymbol) {
 export function PriceChart({
   symbol,
   timeframe,
-  title = "K 线总览",
-  description = "图内切换标的、周期与日期范围",
+  title = "TradingView 参考视图",
+  description = "保留原生行情细节，作为本地研究图旁的次级参考位",
   height = "clamp(320px, 68vw, 500px)",
 }: PriceChartProps) {
   const widgetHostRef = useRef<HTMLDivElement | null>(null);
@@ -166,10 +166,13 @@ export function PriceChart({
   }, [symbol, widgetConfig]);
 
   return (
-    <section className="rounded-lg border border-border/80 bg-card/95 p-5 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.18)]">
+    <section
+      className="rounded-lg border border-border/80 bg-card/95 p-5 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.18)]"
+      aria-label="TradingView 参考视图"
+    >
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-[0.32em] text-muted-foreground">
-          行情主视图
+          次级参考位
         </p>
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
           <h2 className="text-3xl font-semibold text-foreground">{title}</h2>

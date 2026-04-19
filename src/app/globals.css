@@ -51,13 +51,23 @@
   --chart-panel: rgb(255, 255, 255);
   --chart-grid: rgba(15, 23, 42, 0.08);
   --chart-grid-strong: rgba(15, 23, 42, 0.14);
-  --chart-bull: rgb(13, 148, 136);
+  --chart-bull: rgb(22, 163, 74);
   --chart-bear: rgb(220, 38, 38);
   --chart-bear-soft: rgba(220, 38, 38, 0.72);
   --chart-neutral: rgb(59, 130, 246);
   --chart-crosshair: rgba(15, 23, 42, 0.18);
   --chart-text: rgba(15, 23, 42, 0.92);
   --chart-text-muted: rgba(71, 85, 105, 0.78);
+  --chart-window-highlight: rgba(245, 158, 11, 0.16);
+  --chart-window-highlight-border: rgba(245, 158, 11, 0.42);
+  --chart-good-surface: rgba(13, 148, 136, 0.14);
+  --chart-good-border: rgba(13, 148, 136, 0.46);
+  --chart-bad-surface: rgba(220, 38, 38, 0.14);
+  --chart-bad-border: rgba(220, 38, 38, 0.42);
+  --chart-neutral-surface: rgba(59, 130, 246, 0.12);
+  --chart-neutral-border: rgba(59, 130, 246, 0.34);
+  --chart-pending-surface: rgba(100, 116, 139, 0.14);
+  --chart-pending-border: rgba(100, 116, 139, 0.36);
 }
 
 * {
@@ -90,4 +100,136 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+.research-chart-shell {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--chart-grid-strong) 80%, white);
+  border-radius: 0.5rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9)),
+    var(--chart-panel);
+}
+
+.research-chart-plot-area {
+  position: absolute;
+  inset: 0 var(--research-chart-price-scale-width, 88px) 0 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.research-chart-window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-inline: 1px solid var(--chart-window-highlight-border);
+  background: var(--chart-window-highlight);
+  pointer-events: none;
+}
+
+.research-lane-row {
+  position: relative;
+  min-height: 4.75rem;
+  overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--chart-grid) 100%, white);
+  border-radius: 0.5rem;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.7), rgba(255, 255, 255, 0.95));
+}
+
+.research-lane-track {
+  position: absolute;
+  inset: 0 var(--research-chart-price-scale-width, 88px) 0 0;
+  overflow: visible;
+}
+
+.research-outcome-lane {
+  position: absolute;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  display: flex;
+  min-width: 0;
+  overflow: visible;
+  border: 1px solid var(--chart-neutral-border);
+  border-radius: 0.5rem;
+  background: var(--chart-neutral-surface);
+  padding: 0.75rem 0.875rem;
+  text-align: left;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.research-outcome-lane-content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+  overflow: hidden;
+}
+
+.research-outcome-time-popover {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  z-index: 4;
+  width: min(18rem, calc(100vw - 2rem));
+  border: 1px solid color-mix(in srgb, var(--border) 88%, white);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.97);
+  padding: 0.875rem;
+  box-shadow: 0 20px 40px -24px rgba(15, 23, 42, 0.38);
+  pointer-events: none;
+}
+
+.research-outcome-time-popover::after {
+  content: "";
+  position: absolute;
+  top: calc(100% - 0.35rem);
+  height: 0.75rem;
+  width: 0.75rem;
+  rotate: 45deg;
+  border-right: 1px solid color-mix(in srgb, var(--border) 88%, white);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, white);
+  background: rgba(255, 255, 255, 0.97);
+}
+
+.research-outcome-time-popover[data-align="start"]::after {
+  left: 1rem;
+}
+
+.research-outcome-time-popover[data-align="end"]::after {
+  right: 1rem;
+}
+
+.research-outcome-lane:hover {
+  transform: translateY(-1px);
+}
+
+.research-outcome-lane:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--chart-neutral) 55%, white);
+  outline-offset: 1px;
+}
+
+.research-outcome-lane[data-result="good"] {
+  border-color: var(--chart-good-border);
+  background: var(--chart-good-surface);
+}
+
+.research-outcome-lane[data-result="bad"] {
+  border-color: var(--chart-bad-border);
+  background: var(--chart-bad-surface);
+}
+
+.research-outcome-lane[data-result="pending"] {
+  border-color: var(--chart-pending-border);
+  background: var(--chart-pending-surface);
+}
+
+.research-outcome-lane[data-state="selected"] {
+  z-index: 2;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--chart-text) 20%, white), 0 12px 24px -20px rgba(15, 23, 42, 0.45);
+  transform: translateY(-1px);
 }

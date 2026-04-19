@@ -10,9 +10,21 @@ export async function GET() {
 
 export async function POST() {
   const samples = await db.tradeSample.findMany({
-    include: { plan: true },
+    include: {
+      plan: {
+        include: {
+          record: {
+            select: {
+              archivedAt: true,
+            },
+          },
+        },
+      },
+    },
   });
-  const candidates = buildStrategyCandidates(samples);
+  const candidates = buildStrategyCandidates(
+    samples.filter((sample) => sample.plan.record.archivedAt === null),
+  );
 
   await db.$transaction(async (tx) => {
     await tx.strategyCandidateSample.deleteMany();

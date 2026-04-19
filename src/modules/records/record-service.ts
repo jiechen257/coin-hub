@@ -1,5 +1,12 @@
-import { createTraderRecord } from "@/modules/records/record-repository";
-import { createRecordSchema } from "@/modules/records/record-schema";
+import {
+  archiveTraderRecord,
+  createTraderRecord,
+  updateTraderRecord,
+} from "@/modules/records/record-repository";
+import {
+  createRecordSchema,
+  updateRecordSchema,
+} from "@/modules/records/record-schema";
 import { syncOutcomesForRecordId } from "@/modules/outcomes/outcome-service";
 
 export async function createRecordFromInput(input: unknown) {
@@ -37,4 +44,34 @@ export async function createRecordFromInput(input: unknown) {
   }
 
   return record;
+}
+
+export async function updateRecordFromInput(recordId: string, input: unknown) {
+  const parsed = updateRecordSchema.parse(input);
+  const plans =
+    parsed.recordType === "trade"
+      ? [
+          {
+            ...parsed.trade,
+            label: "real-trade",
+          },
+        ]
+      : parsed.plans;
+
+  const record = await updateTraderRecord(recordId, {
+    traderId: parsed.traderId,
+    symbol: parsed.symbol,
+    recordType: parsed.recordType,
+    sourceType: parsed.sourceType,
+    occurredAt: new Date(parsed.occurredAt),
+    rawContent: parsed.rawContent,
+    notes: parsed.notes,
+    plans,
+  });
+
+  return record;
+}
+
+export async function archiveRecordById(recordId: string) {
+  return archiveTraderRecord(recordId);
 }

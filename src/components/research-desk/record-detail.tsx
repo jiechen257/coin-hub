@@ -89,7 +89,7 @@ export function RecordDetail({ record, onSettlePlan }: RecordDetailProps) {
         </CardHeader>
         <CardContent>
           <p className="text-sm leading-6 text-muted-foreground">
-            选择左侧记录后，这里会显示方案和样本状态。
+            选中结果条或最近记录后，这里会显示对应方案和样本状态。
           </p>
         </CardContent>
       </Card>

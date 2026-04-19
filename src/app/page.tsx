@@ -1,6 +1,8 @@
 import { loadResearchDeskPayload } from "@/components/research-desk/research-desk-data";
 import { ResearchDesk } from "@/components/research-desk/research-desk";
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const initialData = await loadResearchDeskPayload({
     symbol: "BTC",

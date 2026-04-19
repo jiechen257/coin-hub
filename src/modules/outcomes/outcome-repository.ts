@@ -180,7 +180,7 @@ export async function upsertRecordOutcome(input: UpsertRecordOutcomeInput) {
   return mapRecordOutcome(outcome);
 }
 
-export async function replaceReviewTags(outcomeId: string, labels: string[]) {
+export async function replaceReviewTags(outcomeId: string, labels: readonly string[]) {
   const normalizedLabels = Array.from(
     new Set(labels.map((label) => label.trim()).filter((label) => label.length > 0)),
   );
@@ -236,6 +236,20 @@ export async function listSliceOutcomes(input: ListSliceOutcomesInput) {
       timeframe: input.timeframe,
     },
     include: {
+      record: {
+        select: {
+          archivedAt: true,
+        },
+      },
+      plan: {
+        select: {
+          record: {
+            select: {
+              archivedAt: true,
+            },
+          },
+        },
+      },
       reviewTags: {
         include: {
           tag: true,
@@ -245,7 +259,19 @@ export async function listSliceOutcomes(input: ListSliceOutcomesInput) {
     orderBy: [{ windowStartAt: "desc" }, { computedAt: "desc" }],
   });
 
-  return outcomes.map(mapRecordOutcome);
+  return outcomes
+    .filter((outcome) => {
+      if (outcome.record?.archivedAt) {
+        return false;
+      }
+
+      if (outcome.plan?.record.archivedAt) {
+        return false;
+      }
+
+      return true;
+    })
+    .map(mapRecordOutcome);
 }
 
 export const outcomeRepository = {

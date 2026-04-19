@@ -3,6 +3,7 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { CirclePlus, Loader2, Trash2, UserPlus } from "lucide-react";
 import type {
+  ResearchDeskRecord,
   ResearchDeskSymbol,
   ResearchDeskTrader,
 } from "@/components/research-desk/research-desk-types";
@@ -79,20 +80,53 @@ export type CreateRecordRequest =
       plans: ViewPlanPayload[];
     };
 
+export type UpdateRecordRequest =
+  | {
+      traderId: string;
+      symbol: ResearchDeskSymbol;
+      recordType: "trade";
+      sourceType: "manual" | "twitter" | "telegram" | "discord" | "custom-import";
+      occurredAt: string;
+      rawContent: string;
+      notes?: string;
+      trade: TradePayload & {
+        id?: string;
+      };
+      plans: [];
+    }
+  | {
+      traderId: string;
+      symbol: ResearchDeskSymbol;
+      recordType: "view";
+      sourceType: "manual" | "twitter" | "telegram" | "discord" | "custom-import";
+      occurredAt: string;
+      rawContent: string;
+      notes?: string;
+      plans: Array<
+        ViewPlanPayload & {
+          id?: string;
+        }
+      >;
+    };
+
 type RecordFormProps = {
   traders: ResearchDeskTrader[];
+  initialRecord?: ResearchDeskRecord | null;
   onCreateTrader: (input: {
     name: string;
     platform?: string;
     notes?: string;
   }) => Promise<ResearchDeskTrader>;
   onCreateRecord: (input: CreateRecordRequest) => Promise<void>;
+  onUpdateRecord?: (input: UpdateRecordRequest) => Promise<void>;
   onRecordSaved?: () => void;
   onCancel?: () => void;
   variant?: "panel" | "dialog";
 };
 
 type ViewPlanFormState = {
+  id?: string;
+  hasSample?: boolean;
   label: string;
   side: "long" | "short";
   marketContext: string;
@@ -178,12 +212,15 @@ function DirectionOption({
 
 export function RecordForm({
   traders,
+  initialRecord,
   onCreateTrader,
   onCreateRecord,
+  onUpdateRecord,
   onRecordSaved,
   onCancel,
   variant = "panel",
 }: RecordFormProps) {
+  const isEditMode = Boolean(initialRecord);
   const [traderName, setTraderName] = useState("");
   const [selectedTraderId, setSelectedTraderId] = useState<string>("");
   const [symbol, setSymbol] = useState<ResearchDeskSymbol>("BTC");
@@ -207,6 +244,8 @@ export function RecordForm({
   const [error, setError] = useState<string | null>(null);
 
   const traderOptions = useMemo(() => traders, [traders]);
+  const tradePlan = initialRecord?.executionPlans[0] ?? null;
+  const hasSettledTradeSample = Boolean(tradePlan?.sample);
 
   useEffect(() => {
     if (!selectedTraderId && traderOptions[0]) {
@@ -220,6 +259,57 @@ export function RecordForm({
       setSelectedTraderId(traderOptions[0]?.id ?? "");
     }
   }, [selectedTraderId, traderOptions]);
+
+  useEffect(() => {
+    if (!initialRecord) {
+      resetRecordForm();
+      setSelectedTraderId(traderOptions[0]?.id ?? "");
+      setSymbol("BTC");
+      setRecordType("trade");
+      return;
+    }
+
+    const nextTradePlan = initialRecord.executionPlans[0] ?? null;
+
+    setSelectedTraderId(initialRecord.traderId);
+    setSymbol(initialRecord.symbol);
+    setRecordType(initialRecord.recordType);
+    setOccurredAt(toLocalDateTimeValue(initialRecord.occurredAt));
+    setRawContent(initialRecord.rawContent);
+    setTradeSide(nextTradePlan?.side ?? "long");
+    setEntryPrice(
+      nextTradePlan?.sample?.entryPrice?.toString() ??
+        nextTradePlan?.entryPrice?.toString() ??
+        "",
+    );
+    setExitPrice(
+      nextTradePlan?.sample?.exitPrice?.toString() ??
+        nextTradePlan?.exitPrice?.toString() ??
+        "",
+    );
+    setTradeMarketContext(nextTradePlan?.marketContext ?? "");
+    setTradeTriggerText(nextTradePlan?.triggerText ?? "");
+    setTradeEntryText(nextTradePlan?.entryText ?? "");
+    setTradeRiskText(nextTradePlan?.riskText ?? "");
+    setTradeExitText(nextTradePlan?.exitText ?? "");
+    setViewPlans(
+      initialRecord.recordType === "view" && initialRecord.executionPlans.length > 0
+        ? initialRecord.executionPlans.map((plan) => ({
+            id: plan.id,
+            hasSample: Boolean(plan.sample),
+            label: plan.label,
+            side: plan.side,
+            marketContext: plan.marketContext ?? "",
+            triggerText: plan.triggerText,
+            entryText: plan.entryText,
+            riskText: plan.riskText ?? "",
+            exitText: plan.exitText ?? "",
+          }))
+        : [createEmptyViewPlan(0)],
+    );
+    setError(null);
+    setMessage(null);
+  }, [initialRecord]);
 
   function updateViewPlan(index: number, patch: Partial<ViewPlanFormState>) {
     setViewPlans((current) =>
@@ -305,6 +395,34 @@ export function RecordForm({
 
     try {
       if (recordType === "trade") {
+        const tradePayload = {
+          ...(isEditMode && tradePlan ? { id: tradePlan.id } : {}),
+          side: tradeSide,
+          entryPrice: Number(entryPrice),
+          exitPrice: Number(exitPrice),
+          marketContext: tradeMarketContext || undefined,
+          triggerText: tradeTriggerText || "copy trader fill",
+          entryText: tradeEntryText || "copy trader fill",
+          riskText: tradeRiskText || undefined,
+          exitText: tradeExitText || "close with trader",
+        };
+
+        if (isEditMode) {
+          if (!onUpdateRecord) {
+            throw new Error("缺少记录更新处理器");
+          }
+
+          await onUpdateRecord({
+            traderId,
+            symbol,
+            recordType: "trade",
+            sourceType: initialRecord?.sourceType ?? "manual",
+            occurredAt: new Date(occurredAt).toISOString(),
+            rawContent: rawContent.trim(),
+            trade: tradePayload,
+            plans: [],
+          });
+        } else {
         await onCreateRecord({
           traderId,
           symbol,
@@ -312,40 +430,53 @@ export function RecordForm({
           sourceType: "manual",
           occurredAt: new Date(occurredAt).toISOString(),
           rawContent: rawContent.trim(),
-          trade: {
-            side: tradeSide,
-            entryPrice: Number(entryPrice),
-            exitPrice: Number(exitPrice),
-            marketContext: tradeMarketContext || undefined,
-            triggerText: tradeTriggerText || "copy trader fill",
-            entryText: tradeEntryText || "copy trader fill",
-            riskText: tradeRiskText || undefined,
-            exitText: tradeExitText || "close with trader",
-          },
+          trade: tradePayload,
           plans: [],
         });
+        }
       } else {
-        await onCreateRecord({
+        const plans = viewPlans.map((plan) => ({
+          ...(isEditMode && plan.id ? { id: plan.id } : {}),
+          label: plan.label.trim(),
+          side: plan.side,
+          marketContext: plan.marketContext || undefined,
+          triggerText: plan.triggerText.trim(),
+          entryText: plan.entryText.trim(),
+          riskText: plan.riskText || undefined,
+          exitText: plan.exitText || undefined,
+        }));
+
+        if (isEditMode) {
+          if (!onUpdateRecord) {
+            throw new Error("缺少记录更新处理器");
+          }
+
+          await onUpdateRecord({
+            traderId,
+            symbol,
+            recordType: "view",
+            sourceType: initialRecord?.sourceType ?? "manual",
+            occurredAt: new Date(occurredAt).toISOString(),
+            rawContent: rawContent.trim(),
+            plans,
+          });
+        } else {
+          await onCreateRecord({
           traderId,
           symbol,
           recordType: "view",
           sourceType: "manual",
           occurredAt: new Date(occurredAt).toISOString(),
           rawContent: rawContent.trim(),
-          plans: viewPlans.map((plan) => ({
-            label: plan.label.trim(),
-            side: plan.side,
-            marketContext: plan.marketContext || undefined,
-            triggerText: plan.triggerText.trim(),
-            entryText: plan.entryText.trim(),
-            riskText: plan.riskText || undefined,
-            exitText: plan.exitText || undefined,
-          })),
+            plans,
         });
+        }
       }
 
-      resetRecordForm();
-      setMessage("记录已保存");
+      if (!isEditMode) {
+        resetRecordForm();
+      }
+      setMessage(isEditMode ? "记录已更新" : "记录已保存");
       onRecordSaved?.();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "保存记录失败");
@@ -367,10 +498,16 @@ export function RecordForm({
         </p>
         <div className="space-y-1">
           <h2 className="text-lg font-semibold tracking-tight text-foreground">
-            {variant === "dialog" ? "记录创建器" : "记录流"}
+            {variant === "dialog"
+              ? isEditMode
+                ? "记录编辑器"
+                : "记录创建器"
+              : "记录流"}
           </h2>
           <p className="text-sm leading-6 text-muted-foreground">
-            先选对象，再决定这是一笔真实开单还是一条行情观点。
+            {isEditMode
+              ? "更新当前记录的原始内容与方案结构，已结算方案保持原有样本。"
+              : "先选对象，再决定这是一笔真实开单还是一条行情观点。"}
           </p>
         </div>
       </div>
@@ -472,15 +609,30 @@ export function RecordForm({
 
         <Tabs
           value={recordType}
-          onValueChange={(value) => setRecordType(value as "trade" | "view")}
+          onValueChange={(value) => {
+            if (isEditMode) {
+              return;
+            }
+
+            setRecordType(value as "trade" | "view");
+          }}
           className="gap-5"
         >
           <div className="grid gap-2">
             <Label>记录类型</Label>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="trade">真实开单</TabsTrigger>
-              <TabsTrigger value="view">行情观点</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2" aria-disabled={isEditMode}>
+              <TabsTrigger value="trade" disabled={isEditMode}>
+                真实开单
+              </TabsTrigger>
+              <TabsTrigger value="view" disabled={isEditMode}>
+                行情观点
+              </TabsTrigger>
             </TabsList>
+            {isEditMode ? (
+              <p className="text-xs leading-5 text-muted-foreground">
+                编辑时保持原记录类型，避免打断既有样本与 outcome 关系。
+              </p>
+            ) : null}
           </div>
 
           <FieldBlock
@@ -491,7 +643,7 @@ export function RecordForm({
             <Textarea
               id="raw-content"
               aria-label="原始记录"
-              placeholder="输入当时的原始记录、截图摘要或执行说明"
+              placeholder="输入当时的原始记录或执行说明"
               value={rawContent}
               onChange={(event) => setRawContent(event.target.value)}
               className="min-h-28"
@@ -531,6 +683,7 @@ export function RecordForm({
                   inputMode="decimal"
                   placeholder="例如 82345.5"
                   value={entryPrice}
+                  disabled={hasSettledTradeSample}
                   onChange={(event) => setEntryPrice(event.target.value)}
                 />
               </FieldBlock>
@@ -542,10 +695,16 @@ export function RecordForm({
                   inputMode="decimal"
                   placeholder="例如 83510.2"
                   value={exitPrice}
+                  disabled={hasSettledTradeSample}
                   onChange={(event) => setExitPrice(event.target.value)}
                 />
               </FieldBlock>
             </div>
+            {hasSettledTradeSample ? (
+              <p className="text-xs leading-5 text-muted-foreground">
+                已结算真实开单保留原样本价格，当前编辑只更新记录文本与方案描述。
+              </p>
+            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <FieldBlock label="市场环境" htmlFor="trade-market-context">
@@ -622,6 +781,7 @@ export function RecordForm({
                       type="button"
                       variant="ghost"
                       size="sm"
+                      disabled={Boolean(plan.hasSample)}
                       onClick={() =>
                         setViewPlans((current) =>
                           current.filter((_, planIndex) => planIndex !== index),
@@ -633,6 +793,11 @@ export function RecordForm({
                     </Button>
                   ) : null}
                 </div>
+                {plan.hasSample ? (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    该方案已经结算，当前保留方案本身，不支持直接移除。
+                  </p>
+                ) : null}
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FieldBlock label="方案标签" htmlFor={`plan-label-${index}`}>
@@ -777,7 +942,11 @@ export function RecordForm({
               ) : (
                 <CirclePlus className="h-4 w-4" />
               )}
-              {isSavingRecord ? "保存中..." : "保存记录"}
+              {isSavingRecord
+                ? "保存中..."
+                : isEditMode
+                  ? "保存修改"
+                  : "保存记录"}
             </Button>
           </div>
 

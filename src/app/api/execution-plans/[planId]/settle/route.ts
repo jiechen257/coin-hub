@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { db } from "@/lib/db";
 import { candleRepository } from "@/modules/market-data/candle-repository";
+import { syncOutcomesForRecordId } from "@/modules/outcomes/outcome-service";
 import { settleExecutionPlanInputSchema } from "@/modules/samples/sample-schema";
 import { settleExecutionPlan } from "@/modules/samples/sample-service";
 
@@ -32,9 +33,11 @@ export async function POST(
       where: { id: planId },
       include: { record: true },
     });
-    const candles = await candleRepository.listCandles({
+    const timeframe = (plan.record.timeframe ?? "1h") as "15m" | "1h" | "4h" | "1d";
+    const candles = await candleRepository.listCandlesWithPreferredSource({
       symbol: plan.record.symbol,
-      timeframe: (plan.record.timeframe ?? "1h") as "15m" | "1h" | "4h" | "1d",
+      timeframe,
+      preferredSource: "binance",
     });
 
     const sample = await settleExecutionPlan({
@@ -55,6 +58,7 @@ export async function POST(
         exitPrice: body.exitPrice,
       },
     });
+    await syncOutcomesForRecordId(plan.record.id, timeframe);
 
     return NextResponse.json({ sample });
   } catch (error) {

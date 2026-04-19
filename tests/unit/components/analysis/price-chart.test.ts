@@ -1,7 +1,10 @@
-// @vitest-environment node
+// @vitest-environment jsdom
 
+import { createElement } from "react";
+import { render, screen } from "@testing-library/react";
 import {
   buildTradingViewWidgetConfig,
+  PriceChart,
   toTradingViewInterval,
   toTradingViewSymbol,
 } from "@/components/analysis/price-chart";
@@ -46,5 +49,21 @@ describe("price-chart tradingview helpers", () => {
       },
       support_host: "https://www.tradingview.com",
     });
+  });
+
+  it("renders TradingView as a secondary reference view", () => {
+    render(
+      createElement(PriceChart, {
+        symbol: "BTC",
+        timeframe: "1h",
+        height: "420px",
+      }),
+    );
+
+    expect(screen.getByText("TradingView 参考视图")).toBeInTheDocument();
+    expect(screen.getByText("次级参考位")).toBeInTheDocument();
+    expect(
+      screen.getByText(/保留原生行情细节，作为本地研究图旁的次级参考位/),
+    ).toBeInTheDocument();
   });
 });
