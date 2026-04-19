@@ -1,5 +1,40 @@
 export type ResearchDeskSymbol = "BTC" | "ETH";
 export type ResearchDeskTimeframe = "15m" | "1h" | "4h" | "1d";
+export type ResearchDeskOutcomeResultLabel = "good" | "neutral" | "bad" | "pending";
+export type ResearchDeskReviewTagKind = "preset" | "custom";
+
+export type ResearchDeskOutcome = {
+  id: string;
+  recordId: string | null;
+  planId: string | null;
+  symbol: ResearchDeskSymbol;
+  timeframe: ResearchDeskTimeframe;
+  windowType: string;
+  windowStartAt: string;
+  windowEndAt: string;
+  resultLabel: ResearchDeskOutcomeResultLabel;
+  resultReason: string;
+  forwardReturnPercent: number | null;
+  maxFavorableExcursionPercent: number | null;
+  maxAdverseExcursionPercent: number | null;
+  ruleVersion: string;
+  computedAt: string;
+  reviewTags: string[];
+};
+
+export type ResearchDeskReviewTagOption = {
+  label: string;
+  kind: ResearchDeskReviewTagKind;
+};
+
+export type ResearchDeskOutcomeAggregates = {
+  total: number;
+  byResultLabel: Record<ResearchDeskOutcomeResultLabel, number>;
+  byReviewTag: Array<{
+    label: string;
+    count: number;
+  }>;
+};
 
 export type ResearchDeskTrader = {
   id: string;

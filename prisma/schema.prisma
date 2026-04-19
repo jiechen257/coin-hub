@@ -47,6 +47,7 @@ model TraderRecord {
   updatedAt      DateTime        @updatedAt
   trader         TraderProfile   @relation(fields: [traderId], references: [id], onDelete: Cascade)
   executionPlans ExecutionPlan[]
+  outcomes       RecordOutcome[]
 
   @@index([symbol, occurredAt])
 }
@@ -70,7 +71,47 @@ model ExecutionPlan {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   record        TraderRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  outcome       RecordOutcome?
   sample        TradeSample?
+}
+
+model RecordOutcome {
+  id                           String                   @id @default(cuid())
+  recordId                     String?
+  planId                       String?                  @unique
+  symbol                       String
+  timeframe                    String
+  windowType                   String
+  windowStartAt                DateTime
+  windowEndAt                  DateTime
+  resultLabel                  String
+  resultReason                 String
+  forwardReturnPercent         Float?
+  maxFavorableExcursionPercent Float?
+  maxAdverseExcursionPercent   Float?
+  ruleVersion                  String
+  computedAt                   DateTime                 @default(now())
+  record                       TraderRecord?            @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  plan                         ExecutionPlan?           @relation(fields: [planId], references: [id], onDelete: Cascade)
+  reviewTags                   RecordOutcomeReviewTag[]
+
+  @@index([symbol, timeframe, resultLabel])
+}
+
+model ReviewTag {
+  id    String                  @id @default(cuid())
+  label String                  @unique
+  kind  String
+  links RecordOutcomeReviewTag[]
+}
+
+model RecordOutcomeReviewTag {
+  outcomeId String
+  tagId     String
+  outcome   RecordOutcome @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+  tag       ReviewTag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([outcomeId, tagId])
 }
 
 model TradeSample {
