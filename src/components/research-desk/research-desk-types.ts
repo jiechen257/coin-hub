@@ -30,12 +30,19 @@ export type ResearchDeskReviewTagOption = {
   kind: ResearchDeskReviewTagKind;
 };
 
-export type ResearchDeskOutcomeAggregates = {
+export type ResearchDeskOutcomeCounts = Record<
+  ResearchDeskOutcomeResultLabel,
+  number
+> & {
   total: number;
-  byResultLabel: Record<ResearchDeskOutcomeResultLabel, number>;
-  byReviewTag: Array<{
+};
+
+export type ResearchDeskOutcomeAggregates = {
+  counts: ResearchDeskOutcomeCounts;
+  reviewTags: Array<{
     label: string;
     count: number;
+    kind: ResearchDeskReviewTagKind;
   }>;
 };
 
@@ -137,9 +144,13 @@ export type ResearchDeskPayload = {
   traders: ResearchDeskTrader[];
   records: ResearchDeskRecord[];
   selectedRecordId: string | null;
+  selectedOutcomeId: string | null;
   candidates: ResearchDeskCandidate[];
+  reviewTagOptions: ResearchDeskReviewTagOption[];
+  summary: ResearchDeskOutcomeAggregates;
   chart: {
     candles: ResearchDeskCandle[];
+    outcomes: ResearchDeskOutcome[];
   };
 };
 
