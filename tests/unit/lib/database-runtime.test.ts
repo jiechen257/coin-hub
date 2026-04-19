@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_LOCAL_DATABASE_URL,
   resolveDatabaseRuntimeConfig,
+  resolveLocalDevelopmentEnv,
   resolvePrismaCliDatabaseUrl,
 } from "@/lib/database-runtime";
 
@@ -89,5 +90,38 @@ describe("resolvePrismaCliDatabaseUrl", () => {
         LOCAL_DATABASE_URL: "libsql://coin-hub.turso.io",
       }),
     ).toThrow("LOCAL_DATABASE_URL must use file: for SQLite.");
+  });
+});
+
+describe("resolveLocalDevelopmentEnv", () => {
+  it("forces local sqlite env for development server startup", () => {
+    expect(
+      resolveLocalDevelopmentEnv({
+        DATABASE_URL: "file:./prisma/dev.db",
+        LOCAL_DATABASE_URL: "file:./prisma/local-dev.db",
+        TURSO_DATABASE_URL: "libsql://coin-hub.turso.io",
+        TURSO_AUTH_TOKEN: "token-123",
+        NEXT_RUNTIME: "nodejs",
+      }),
+    ).toEqual({
+      DATABASE_URL: "file:./prisma/local-dev.db",
+      LOCAL_DATABASE_URL: "file:./prisma/local-dev.db",
+      TURSO_DATABASE_URL: "",
+      TURSO_AUTH_TOKEN: "",
+      NEXT_RUNTIME: "nodejs",
+    });
+  });
+
+  it("falls back to the default local sqlite database when no local url exists", () => {
+    expect(
+      resolveLocalDevelopmentEnv({
+        DATABASE_URL: "libsql://coin-hub.turso.io",
+      }),
+    ).toEqual({
+      DATABASE_URL: DEFAULT_LOCAL_DATABASE_URL,
+      LOCAL_DATABASE_URL: DEFAULT_LOCAL_DATABASE_URL,
+      TURSO_DATABASE_URL: "",
+      TURSO_AUTH_TOKEN: "",
+    });
   });
 });

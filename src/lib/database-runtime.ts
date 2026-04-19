@@ -86,3 +86,17 @@ export function resolvePrismaCliDatabaseUrl(env: DatabaseRuntimeEnv) {
 
   return DEFAULT_LOCAL_DATABASE_URL;
 }
+
+export function resolveLocalDevelopmentEnv(
+  env: DatabaseRuntimeEnv,
+): DatabaseRuntimeEnv {
+  const localDatabaseUrl = resolvePrismaCliDatabaseUrl(env);
+
+  return {
+    ...env,
+    DATABASE_URL: localDatabaseUrl,
+    LOCAL_DATABASE_URL: localDatabaseUrl,
+    TURSO_DATABASE_URL: "",
+    TURSO_AUTH_TOKEN: "",
+  };
+}
