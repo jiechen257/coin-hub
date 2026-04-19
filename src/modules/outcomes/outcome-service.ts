@@ -186,6 +186,25 @@ function buildOutcomeMetrics(args: {
   };
 }
 
+function hasContinuousCandles(args: {
+  candles: OutcomeCandle[];
+  timeframeMs: number;
+}) {
+  for (let index = 1; index < args.candles.length; index += 1) {
+    const previousCandle = args.candles[index - 1];
+    const currentCandle = args.candles[index];
+
+    if (
+      currentCandle.openTime.getTime() - previousCandle.openTime.getTime() !==
+      args.timeframeMs
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function findFirstThresholdHit(args: {
   candles: OutcomeCandle[];
   side: OutcomePlanSide;
@@ -259,10 +278,15 @@ function resolveOutcomeLabel(args: {
   metrics: OutcomeMetrics;
   favorableHitIndex: number | null;
   adverseHitIndex: number | null;
+  windowIsContinuous: boolean;
   windowComplete: boolean;
   favorablePct: number;
   adversePct: number;
 }) {
+  if (!args.windowIsContinuous) {
+    return "pending" as const;
+  }
+
   if (
     args.favorableHitIndex !== null &&
     (args.adverseHitIndex === null || args.favorableHitIndex <= args.adverseHitIndex)
@@ -409,11 +433,17 @@ function computeSingleOutcome(args: {
     favorablePct: profile.favorablePct,
     adversePct: profile.adversePct,
   });
-  const windowComplete = windowCandles.length >= profile.windowCandles;
+  const windowIsContinuous = hasContinuousCandles({
+    candles: windowCandles,
+    timeframeMs,
+  });
+  const windowComplete =
+    windowIsContinuous && windowCandles.length >= profile.windowCandles;
   const resultLabel = resolveOutcomeLabel({
     metrics,
     favorableHitIndex,
     adverseHitIndex,
+    windowIsContinuous,
     windowComplete,
     favorablePct: profile.favorablePct,
     adversePct: profile.adversePct,

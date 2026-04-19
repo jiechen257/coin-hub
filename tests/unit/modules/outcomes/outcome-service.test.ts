@@ -265,4 +265,53 @@ describe("outcome-service", () => {
     expect(oneHourResult[0]?.windowEndAt.toISOString()).toBe("2026-04-20T00:00:00.000Z");
     expect(fourHourResult[0]?.windowEndAt.toISOString()).toBe("2026-04-22T00:00:00.000Z");
   });
+
+  it("returns pending when a key candle inside the observation window is missing", async () => {
+    const candles = createCandleSeries({
+      startAt: "2026-04-19T00:00:00.000Z",
+      length: 25,
+      buildCandle: (index) =>
+        index === 0
+          ? {
+              open: 100,
+              high: 101,
+              low: 99.5,
+              close: 100.6,
+            }
+          : index === 3
+            ? {
+                open: 100.6,
+                high: 104,
+                low: 100.4,
+                close: 103.4,
+              }
+            : {},
+    }).filter((candle) => candle.openTime.toISOString() !== "2026-04-19T02:00:00.000Z");
+
+    const result = await syncRecordOutcomes({
+      record: {
+        id: "record-window-gap",
+        recordType: "trade",
+        symbol: "BTC",
+        occurredAt: new Date("2026-04-19T00:00:00.000Z"),
+        executionPlans: [
+          {
+            id: "plan-window-gap",
+            side: "long",
+            triggerText: "window gap",
+            entryText: "window gap",
+          },
+        ],
+      },
+      timeframe: "1h",
+      candles,
+    });
+
+    expect(result[0]).toMatchObject({
+      resultLabel: "pending",
+      forwardReturnPercent: null,
+      maxFavorableExcursionPercent: null,
+      maxAdverseExcursionPercent: null,
+    });
+  });
 });
