@@ -1,10 +1,13 @@
 export type ResearchDeskSymbol = "BTC" | "ETH";
 export type ResearchDeskTimeframe = "15m" | "1h" | "4h" | "1d";
 export type ResearchDeskOutcomeResultLabel = "good" | "neutral" | "bad" | "pending";
+export type ResearchDeskOutcomeSubjectType = "record" | "plan";
 export type ResearchDeskReviewTagKind = "preset" | "custom";
 
 export type ResearchDeskOutcome = {
   id: string;
+  subjectType: ResearchDeskOutcomeSubjectType;
+  subjectId: string;
   recordId: string | null;
   planId: string | null;
   symbol: ResearchDeskSymbol;

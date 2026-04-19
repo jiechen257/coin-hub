@@ -5,8 +5,9 @@ import {
   getReviewTagKind,
 } from "@/modules/outcomes/review-tag-catalog";
 
-export type UpsertRecordOutcomeInput = {
-  recordId: string;
+export type OutcomeSubjectType = "record" | "plan";
+
+type BaseOutcomeInput = {
   symbol: string;
   timeframe: string;
   windowType: string;
@@ -19,6 +20,16 @@ export type UpsertRecordOutcomeInput = {
   maxAdverseExcursionPercent?: number | null;
   ruleVersion: string;
 };
+
+export type UpsertRecordOutcomeInput =
+  | (BaseOutcomeInput & {
+      subjectType: "record";
+      subjectId: string;
+    })
+  | (BaseOutcomeInput & {
+      subjectType: "plan";
+      subjectId: string;
+    });
 
 export type ListSliceOutcomesInput = {
   symbol: string;
@@ -35,7 +46,9 @@ type RecordOutcomeWithReviewTags = Prisma.RecordOutcomeGetPayload<{
   };
 }>;
 
-const reviewTagOrder = new Map(DEFAULT_REVIEW_TAGS.map((label, index) => [label, index]));
+const reviewTagOrder = new Map<string, number>(
+  DEFAULT_REVIEW_TAGS.map((label, index) => [label, index]),
+);
 
 function sortReviewTags(labels: string[]) {
   return [...labels].sort((left, right) => {
@@ -51,8 +64,17 @@ function sortReviewTags(labels: string[]) {
 }
 
 function mapRecordOutcome(outcome: RecordOutcomeWithReviewTags) {
+  const subjectType: OutcomeSubjectType = outcome.planId ? "plan" : "record";
+  const subjectId = outcome.planId ?? outcome.recordId;
+
+  if (!subjectId) {
+    throw new Error(`Record outcome ${outcome.id} is missing a persisted subject.`);
+  }
+
   return {
     id: outcome.id,
+    subjectType,
+    subjectId,
     recordId: outcome.recordId,
     planId: outcome.planId,
     symbol: outcome.symbol,
@@ -84,9 +106,33 @@ async function getOutcomeById(outcomeId: string) {
   });
 }
 
+function buildSubjectStorage(input: UpsertRecordOutcomeInput) {
+  return input.subjectType === "record"
+    ? {
+        recordId: input.subjectId,
+        planId: null,
+      }
+    : {
+        recordId: null,
+        planId: input.subjectId,
+      };
+}
+
+function buildExistingOutcomeWhere(input: UpsertRecordOutcomeInput): Prisma.RecordOutcomeWhereInput {
+  return input.subjectType === "record"
+    ? {
+        recordId: input.subjectId,
+        timeframe: input.timeframe,
+        windowType: input.windowType,
+      }
+    : {
+        planId: input.subjectId,
+      };
+}
+
 export async function upsertRecordOutcome(input: UpsertRecordOutcomeInput) {
   const payload = {
-    recordId: input.recordId,
+    ...buildSubjectStorage(input),
     symbol: input.symbol,
     timeframe: input.timeframe,
     windowType: input.windowType,
@@ -101,11 +147,7 @@ export async function upsertRecordOutcome(input: UpsertRecordOutcomeInput) {
   };
 
   const existing = await db.recordOutcome.findFirst({
-    where: {
-      recordId: input.recordId,
-      timeframe: input.timeframe,
-      windowType: input.windowType,
-    },
+    where: buildExistingOutcomeWhere(input),
     select: { id: true },
   });
 
