@@ -5,6 +5,14 @@ export type StoreCandlesResult = {
   processedCandles: number;
 };
 
+export type ListCandlesInput = {
+  symbol: string;
+  timeframe: CandleTimeframe;
+  limit?: number;
+  fromOpenTime?: Date;
+  source?: string;
+};
+
 export type CandleRepository = {
   storeCandles(input: {
     symbol: string;
@@ -12,7 +20,72 @@ export type CandleRepository = {
     candles: ReadonlyArray<NormalizedCandle>;
     source?: string;
   }): Promise<StoreCandlesResult>;
+  listCandles(input: ListCandlesInput): ReturnType<typeof listCandles>;
+  listCandlesWithPreferredSource(input: {
+    symbol: string;
+    timeframe: CandleTimeframe;
+    limit?: number;
+    fromOpenTime?: Date;
+    preferredSource: string;
+  }): ReturnType<typeof listCandlesWithPreferredSource>;
 };
+
+const DEFAULT_CANDLE_LIMIT = 500;
+
+export async function listCandles(input: ListCandlesInput) {
+  const orderDirection = input.fromOpenTime ? "asc" : "desc";
+  const candles = await db.candle.findMany({
+    where: {
+      symbol: input.symbol,
+      timeframe: input.timeframe,
+      ...(input.source
+        ? {
+            source: input.source,
+          }
+        : {}),
+      ...(input.fromOpenTime
+        ? {
+            openTime: {
+              gte: input.fromOpenTime,
+            },
+          }
+        : {}),
+    },
+    orderBy: {
+      openTime: orderDirection,
+    },
+    take: input.limit ?? DEFAULT_CANDLE_LIMIT,
+  });
+
+  return orderDirection === "desc" ? candles.reverse() : candles;
+}
+
+export async function listCandlesWithPreferredSource(input: {
+  symbol: string;
+  timeframe: CandleTimeframe;
+  limit?: number;
+  fromOpenTime?: Date;
+  preferredSource: string;
+}) {
+  const preferredCandles = await listCandles({
+    symbol: input.symbol,
+    timeframe: input.timeframe,
+    limit: input.limit,
+    fromOpenTime: input.fromOpenTime,
+    source: input.preferredSource,
+  });
+
+  if (preferredCandles.length > 0) {
+    return preferredCandles;
+  }
+
+  return listCandles({
+    symbol: input.symbol,
+    timeframe: input.timeframe,
+    limit: input.limit,
+    fromOpenTime: input.fromOpenTime,
+  });
+}
 
 export async function storeCandles(input: {
   symbol: string;
@@ -67,4 +140,6 @@ export async function storeCandles(input: {
 
 export const candleRepository: CandleRepository = {
   storeCandles,
+  listCandles,
+  listCandlesWithPreferredSource,
 };

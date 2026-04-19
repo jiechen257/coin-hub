@@ -1,16 +1,17 @@
-import { AppShell } from "@/components/app-shell/app-shell";
-import { OverviewDashboard } from "@/components/overview/overview-dashboard";
-import { getOverviewPayload } from "@/modules/overview/overview-service";
+import { loadResearchDeskPayload } from "@/components/research-desk/research-desk-data";
+import { ResearchDesk } from "@/components/research-desk/research-desk";
 
-/**
- * 渲染根路由首页，把服务端总览数据直接送进首页控制台。
- */
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
-  const overview = await getOverviewPayload();
+  const initialData = await loadResearchDeskPayload({
+    symbol: "BTC",
+    timeframe: "1h",
+  });
 
   return (
-    <AppShell>
-      <OverviewDashboard initialData={overview} />
-    </AppShell>
+    <main className="mx-auto min-h-screen max-w-[1840px] px-4 py-6 sm:px-6 sm:py-8">
+      <ResearchDesk initialData={initialData} />
+    </main>
   );
 }

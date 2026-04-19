@@ -6,88 +6,153 @@ datasource db {
   provider = "sqlite"
 }
 
-model ConfigVersion {
-  id          String      @id @default(cuid())
-  summary     String
-  paramsJson  Json
-  isActive    Boolean     @default(false)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  replayJobs  ReplayJob[]
-}
-
 model Candle {
-  id         String   @id @default(cuid())
-  symbol     String
-  timeframe  String
-  openTime   DateTime
-  open       Float
-  high       Float
-  low        Float
-  close      Float
-  volume     Float?
-  source     String
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  symbol    String
+  timeframe String
+  openTime  DateTime
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    Float?
+  source    String
+  createdAt DateTime @default(now())
 
   @@unique([symbol, timeframe, openTime])
   @@index([symbol, timeframe, openTime])
 }
 
-model Tweet {
-  id          String               @id
-  author      String
-  text        String
-  publishedAt DateTime
-  createdAt   DateTime             @default(now())
-  viewpoints  AttributedViewpoint[]
+model TraderProfile {
+  id        String         @id @default(cuid())
+  name      String
+  platform  String?
+  notes     String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  records   TraderRecord[]
 }
 
-model AttributedViewpoint {
-  id                String   @id @default(cuid())
-  tweetId           String
-  symbol            String?
-  publishedAt       DateTime
-  bias              String
-  reasoning         String?
-  evidenceTermsJson Json?
-  confidence        Float
-  sourceType        String
-  createdAt         DateTime @default(now())
-  tweet             Tweet    @relation(fields: [tweetId], references: [id], onDelete: Cascade)
+model TraderRecord {
+  id             String          @id @default(cuid())
+  traderId       String
+  symbol         String
+  timeframe      String?
+  recordType     String
+  sourceType     String
+  occurredAt     DateTime
+  rawContent     String
+  notes          String?
+  archivedAt     DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  trader         TraderProfile   @relation(fields: [traderId], references: [id], onDelete: Cascade)
+  executionPlans ExecutionPlan[]
+  outcomes       RecordOutcome[]
 
-  @@index([symbol, publishedAt])
+  @@index([symbol, occurredAt])
+  @@index([archivedAt])
 }
 
-model Job {
-  id          String   @id @default(cuid())
-  type        String
-  status      String   @default("queued")
-  payloadJson Json
-  error       String?
-  createdAt   DateTime @default(now())
-  startedAt   DateTime?
-  completedAt DateTime?
+model ExecutionPlan {
+  id            String       @id @default(cuid())
+  recordId      String
+  label         String
+  status        String       @default("draft")
+  side          String
+  entryPrice    Float?
+  exitPrice     Float?
+  stopLoss      Float?
+  takeProfit    Float?
+  marketContext String?
+  triggerText   String
+  entryText     String
+  riskText      String?
+  exitText      String?
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  record        TraderRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  outcomes      RecordOutcome[]
+  sample        TradeSample?
 }
 
-model RunSnapshot {
-  id                String   @id @default(cuid())
-  mode              String
-  strategyVersion   String
-  warningsJson      Json
-  assetsJson        Json
-  inputRefsJson     Json?
-  degradedAssetsJson Json?
-  createdAt         DateTime @default(now())
+model RecordOutcome {
+  id                           String                   @id @default(cuid())
+  recordId                     String?
+  planId                       String?
+  symbol                       String
+  timeframe                    String
+  windowType                   String
+  windowStartAt                DateTime
+  windowEndAt                  DateTime
+  resultLabel                  String
+  resultReason                 String
+  forwardReturnPercent         Float?
+  maxFavorableExcursionPercent Float?
+  maxAdverseExcursionPercent   Float?
+  ruleVersion                  String
+  computedAt                   DateTime                 @default(now())
+  record                       TraderRecord?            @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  plan                         ExecutionPlan?           @relation(fields: [planId], references: [id], onDelete: Cascade)
+  reviewTags                   RecordOutcomeReviewTag[]
+
+  @@unique([recordId, timeframe, windowType], name: "recordScopeKey")
+  @@unique([planId, timeframe, windowType], name: "planScopeKey")
+  @@index([symbol, timeframe, resultLabel])
 }
 
-model ReplayJob {
-  id              String         @id @default(cuid())
-  configVersionId String?
-  fromTime        DateTime
-  toTime          DateTime
-  status          String         @default("queued")
-  resultJson      Json?
-  createdAt       DateTime       @default(now())
-  completedAt     DateTime?
-  configVersion   ConfigVersion? @relation(fields: [configVersionId], references: [id], onDelete: SetNull)
+model ReviewTag {
+  id    String                  @id @default(cuid())
+  label String                  @unique
+  kind  String
+  links RecordOutcomeReviewTag[]
+}
+
+model RecordOutcomeReviewTag {
+  outcomeId String
+  tagId     String
+  outcome   RecordOutcome @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+  tag       ReviewTag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([outcomeId, tagId])
+}
+
+model TradeSample {
+  id                 String                    @id @default(cuid())
+  planId             String                    @unique
+  settledAt          DateTime
+  entryPrice         Float
+  exitPrice          Float
+  pnlValue           Float
+  pnlPercent         Float
+  holdingMinutes     Int
+  maxDrawdownPercent Float?
+  resultTag          String
+  notes              String?
+  plan               ExecutionPlan             @relation(fields: [planId], references: [id], onDelete: Cascade)
+  strategyLinks      StrategyCandidateSample[]
+}
+
+model StrategyCandidate {
+  id            String                    @id @default(cuid())
+  marketContext String?
+  triggerText   String
+  entryText     String
+  riskText      String?
+  exitText      String?
+  sampleCount   Int
+  winRate       Float
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  samples       StrategyCandidateSample[]
+}
+
+model StrategyCandidateSample {
+  candidateId String
+  sampleId    String
+  candidate   StrategyCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  sample      TradeSample       @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+
+  @@id([candidateId, sampleId])
 }
