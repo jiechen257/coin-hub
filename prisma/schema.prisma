@@ -71,14 +71,14 @@ model ExecutionPlan {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   record        TraderRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
-  outcome       RecordOutcome?
+  outcomes      RecordOutcome[]
   sample        TradeSample?
 }
 
 model RecordOutcome {
   id                           String                   @id @default(cuid())
   recordId                     String?
-  planId                       String?                  @unique
+  planId                       String?
   symbol                       String
   timeframe                    String
   windowType                   String
@@ -95,6 +95,8 @@ model RecordOutcome {
   plan                         ExecutionPlan?           @relation(fields: [planId], references: [id], onDelete: Cascade)
   reviewTags                   RecordOutcomeReviewTag[]
 
+  @@unique([recordId, timeframe, windowType], name: "recordScopeKey")
+  @@unique([planId, timeframe, windowType], name: "planScopeKey")
   @@index([symbol, timeframe, resultLabel])
 }
 

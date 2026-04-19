@@ -118,15 +118,23 @@ function buildSubjectStorage(input: UpsertRecordOutcomeInput) {
       };
 }
 
-function buildExistingOutcomeWhere(input: UpsertRecordOutcomeInput): Prisma.RecordOutcomeWhereInput {
+function buildOutcomeWhereUnique(
+  input: UpsertRecordOutcomeInput,
+): Prisma.RecordOutcomeWhereUniqueInput {
   return input.subjectType === "record"
     ? {
-        recordId: input.subjectId,
-        timeframe: input.timeframe,
-        windowType: input.windowType,
+        recordScopeKey: {
+          recordId: input.subjectId,
+          timeframe: input.timeframe,
+          windowType: input.windowType,
+        },
       }
     : {
-        planId: input.subjectId,
+        planScopeKey: {
+          planId: input.subjectId,
+          timeframe: input.timeframe,
+          windowType: input.windowType,
+        },
       };
 }
 
@@ -146,33 +154,18 @@ export async function upsertRecordOutcome(input: UpsertRecordOutcomeInput) {
     ruleVersion: input.ruleVersion,
   };
 
-  const existing = await db.recordOutcome.findFirst({
-    where: buildExistingOutcomeWhere(input),
-    select: { id: true },
+  const outcome = await db.recordOutcome.upsert({
+    where: buildOutcomeWhereUnique(input),
+    create: payload,
+    update: payload,
+    include: {
+      reviewTags: {
+        include: {
+          tag: true,
+        },
+      },
+    },
   });
-
-  const outcome = existing
-    ? await db.recordOutcome.update({
-        where: { id: existing.id },
-        data: payload,
-        include: {
-          reviewTags: {
-            include: {
-              tag: true,
-            },
-          },
-        },
-      })
-    : await db.recordOutcome.create({
-        data: payload,
-        include: {
-          reviewTags: {
-            include: {
-              tag: true,
-            },
-          },
-        },
-      });
 
   return mapRecordOutcome(outcome);
 }
