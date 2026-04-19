@@ -1,9 +1,12 @@
 // @vitest-environment node
 
-import { POST as postTraderRecordsRoute } from "@/app/api/trader-records/route";
-import { POST as postTradersRoute } from "@/app/api/traders/route";
-import { db } from "@/lib/db";
-import { createRecordFromInput } from "@/modules/records/record-service";
+process.env.TURSO_DATABASE_URL = "";
+process.env.TURSO_AUTH_TOKEN = "";
+
+const { POST: postTraderRecordsRoute } = await import("@/app/api/trader-records/route");
+const { POST: postTradersRoute } = await import("@/app/api/traders/route");
+const { db } = await import("@/lib/db");
+const { createRecordFromInput } = await import("@/modules/records/record-service");
 import { ZodError } from "zod";
 
 async function expectInputError(input: unknown, path: string) {
@@ -26,12 +29,20 @@ function createJsonRequest(url: string, body: unknown) {
 
 describe("record-service", () => {
   beforeEach(async () => {
+    await db.recordOutcomeReviewTag.deleteMany();
+    await db.reviewTag.deleteMany();
+    await db.recordOutcome.deleteMany();
+    await db.candle.deleteMany();
     await db.executionPlan.deleteMany();
     await db.traderRecord.deleteMany();
     await db.traderProfile.deleteMany();
   });
 
   afterEach(async () => {
+    await db.recordOutcomeReviewTag.deleteMany();
+    await db.reviewTag.deleteMany();
+    await db.recordOutcome.deleteMany();
+    await db.candle.deleteMany();
     await db.executionPlan.deleteMany();
     await db.traderRecord.deleteMany();
     await db.traderProfile.deleteMany();
@@ -61,6 +72,14 @@ describe("record-service", () => {
     });
 
     expect(record.executionPlans[0]?.status).toBe("ready");
+
+    const outcomes = await db.recordOutcome.findMany({
+      where: { recordId: record.id },
+    });
+
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]?.resultLabel).toBe("pending");
+    expect(outcomes[0]?.timeframe).toBe("1h");
   });
 
   it("keeps zero-priced trade plans in ready status", async () => {
@@ -116,6 +135,17 @@ describe("record-service", () => {
 
     expect(record.executionPlans).toHaveLength(2);
     expect(record.executionPlans.every((plan) => plan.status === "draft")).toBe(true);
+
+    const outcomes = await db.recordOutcome.findMany({
+      where: {
+        planId: {
+          in: record.executionPlans.map((plan) => plan.id),
+        },
+      },
+    });
+
+    expect(outcomes).toHaveLength(2);
+    expect(outcomes.every((outcome) => outcome.resultLabel === "pending")).toBe(true);
   });
 
   it("rejects trade records without the required trade payload", async () => {

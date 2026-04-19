@@ -1,5 +1,6 @@
 import { createTraderRecord } from "@/modules/records/record-repository";
 import { createRecordSchema } from "@/modules/records/record-schema";
+import { syncOutcomesForRecordId } from "@/modules/outcomes/outcome-service";
 
 export async function createRecordFromInput(input: unknown) {
   const parsed = createRecordSchema.parse(input);
@@ -14,7 +15,7 @@ export async function createRecordFromInput(input: unknown) {
         ]
       : parsed.plans;
 
-  return createTraderRecord({
+  const record = await createTraderRecord({
     traderId: parsed.traderId,
     symbol: parsed.symbol,
     recordType: parsed.recordType,
@@ -24,4 +25,16 @@ export async function createRecordFromInput(input: unknown) {
     notes: parsed.notes,
     plans,
   });
+
+  try {
+    await syncOutcomesForRecordId(record.id);
+  } catch (error) {
+    console.warn(
+      `[records] failed to sync outcomes for ${record.id}: ${
+        error instanceof Error ? error.message : "unknown error"
+      }`,
+    );
+  }
+
+  return record;
 }

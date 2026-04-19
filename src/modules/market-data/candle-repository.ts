@@ -9,6 +9,7 @@ export type ListCandlesInput = {
   symbol: string;
   timeframe: CandleTimeframe;
   limit?: number;
+  fromOpenTime?: Date;
 };
 
 export type CandleRepository = {
@@ -24,18 +25,26 @@ export type CandleRepository = {
 const DEFAULT_CANDLE_LIMIT = 500;
 
 export async function listCandles(input: ListCandlesInput) {
+  const orderDirection = input.fromOpenTime ? "asc" : "desc";
   const candles = await db.candle.findMany({
     where: {
       symbol: input.symbol,
       timeframe: input.timeframe,
+      ...(input.fromOpenTime
+        ? {
+            openTime: {
+              gte: input.fromOpenTime,
+            },
+          }
+        : {}),
     },
     orderBy: {
-      openTime: "desc",
+      openTime: orderDirection,
     },
     take: input.limit ?? DEFAULT_CANDLE_LIMIT,
   });
 
-  return candles.reverse();
+  return orderDirection === "desc" ? candles.reverse() : candles;
 }
 
 export async function storeCandles(input: {
