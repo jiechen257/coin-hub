@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { ZodError, z } from "zod";
-import { outcomeRepository } from "@/modules/outcomes/outcome-repository";
+import {
+  OutcomeNotFoundError,
+  outcomeRepository,
+} from "@/modules/outcomes/outcome-repository";
 
 const reviewTagPatchSchema = z
   .object({
@@ -24,6 +27,16 @@ function buildBadRequestResponse(error: ZodError | SyntaxError) {
   );
 }
 
+function buildNotFoundResponse(error: OutcomeNotFoundError) {
+  return NextResponse.json(
+    {
+      error: "Record outcome not found",
+      outcomeId: error.outcomeId,
+    },
+    { status: 404 },
+  );
+}
+
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ outcomeId: string }> },
@@ -40,6 +53,10 @@ export async function PATCH(
   } catch (error) {
     if (error instanceof ZodError || error instanceof SyntaxError) {
       return buildBadRequestResponse(error);
+    }
+
+    if (error instanceof OutcomeNotFoundError) {
+      return buildNotFoundResponse(error);
     }
 
     throw error;

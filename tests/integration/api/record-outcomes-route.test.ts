@@ -36,7 +36,7 @@ async function seedOutcome() {
     },
   });
 
-  return outcomeRepository.upsertRecordOutcome({
+  const outcome = await outcomeRepository.upsertRecordOutcome({
     subjectType: "record",
     subjectId: record.id,
     symbol: "BTC",
@@ -51,6 +51,10 @@ async function seedOutcome() {
     maxAdverseExcursionPercent: -1.7,
     ruleVersion: "v1",
   });
+
+  await outcomeRepository.replaceReviewTags(outcome.id, ["突破追随"]);
+
+  return outcome;
 }
 
 describe("record outcomes route", () => {
@@ -87,6 +91,7 @@ describe("record outcomes route", () => {
       "趋势跟随",
       "自定义: 新闻催化",
     ]);
+    expect(payload.outcome.reviewTags).not.toContain("突破追随");
 
     const saved = await outcomeRepository.listSliceOutcomes({
       symbol: "BTC",
@@ -94,5 +99,25 @@ describe("record outcomes route", () => {
     });
 
     expect(saved[0]?.reviewTags).toEqual(["趋势跟随", "自定义: 新闻催化"]);
+    expect(saved[0]?.reviewTags).not.toContain("突破追随");
+  });
+
+  it("returns one stable 404 json body for an unknown outcome id", async () => {
+    const response = await patchOutcome(
+      new Request("http://localhost:3000/api/record-outcomes/missing-outcome", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          reviewTags: ["趋势跟随"],
+        }),
+      }),
+      { params: Promise.resolve({ outcomeId: "missing-outcome" }) },
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Record outcome not found",
+      outcomeId: "missing-outcome",
+    });
   });
 });

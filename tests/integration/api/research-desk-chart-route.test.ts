@@ -99,6 +99,8 @@ describe("research-desk chart route", () => {
     );
     const payload = (await response.json()) as {
       selection: { symbol: string; timeframe: string };
+      selectedOutcomeId: string | null;
+      reviewTagOptions: Array<{ label: string; kind: string }>;
       chart: {
         candles: unknown[];
         outcomes: Array<{ reviewTags: string[] }>;
@@ -115,7 +117,21 @@ describe("research-desk chart route", () => {
     };
 
     expect(response.status).toBe(200);
+    expect(Object.keys(payload).sort()).toEqual([
+      "chart",
+      "reviewTagOptions",
+      "selectedOutcomeId",
+      "selection",
+      "summary",
+    ]);
     expect(payload.selection).toEqual({ symbol: "BTC", timeframe: "1h" });
+    expect(payload.selectedOutcomeId).toEqual(expect.any(String));
+    expect(payload.reviewTagOptions).toEqual(
+      expect.arrayContaining([
+        { label: "趋势跟随", kind: "preset" },
+        { label: "自定义: 新闻催化", kind: "custom" },
+      ]),
+    );
     expect(Array.isArray(payload.chart.candles)).toBe(true);
     expect(Array.isArray(payload.chart.outcomes)).toBe(true);
     expect(payload.chart.outcomes[0]?.reviewTags).toEqual([

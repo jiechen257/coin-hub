@@ -136,22 +136,30 @@ export type ResearchDeskMarker = {
   tone: "bullish" | "bearish" | "neutral";
 };
 
-export type ResearchDeskPayload = {
+export type ResearchDeskSelection = {
+  symbol: ResearchDeskSymbol;
+  timeframe: ResearchDeskTimeframe;
+};
+
+export type ResearchDeskChartSlicePayload = {
   selection: {
     symbol: ResearchDeskSymbol;
     timeframe: ResearchDeskTimeframe;
   };
-  traders: ResearchDeskTrader[];
-  records: ResearchDeskRecord[];
-  selectedRecordId: string | null;
   selectedOutcomeId: string | null;
-  candidates: ResearchDeskCandidate[];
   reviewTagOptions: ResearchDeskReviewTagOption[];
   summary: ResearchDeskOutcomeAggregates;
   chart: {
     candles: ResearchDeskCandle[];
     outcomes: ResearchDeskOutcome[];
   };
+};
+
+export type ResearchDeskPayload = ResearchDeskChartSlicePayload & {
+  traders: ResearchDeskTrader[];
+  records: ResearchDeskRecord[];
+  selectedRecordId: string | null;
+  candidates: ResearchDeskCandidate[];
 };
 
 export function buildRecordMarkers(

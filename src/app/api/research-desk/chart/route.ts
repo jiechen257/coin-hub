@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  loadResearchDeskPayload,
   parseSymbol,
   parseTimeframe,
-} from "@/components/research-desk/research-desk-data";
+  loadResearchDeskChartSlice,
+} from "@/components/research-desk/research-desk-chart-slice";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const timeframe = parseTimeframe(url.searchParams.get("timeframe"));
 
   return NextResponse.json(
-    await loadResearchDeskPayload({
+    await loadResearchDeskChartSlice({
       symbol,
       timeframe,
     }),

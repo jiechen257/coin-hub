@@ -36,6 +36,16 @@ export type ListSliceOutcomesInput = {
   timeframe: string;
 };
 
+export class OutcomeNotFoundError extends Error {
+  readonly outcomeId: string;
+
+  constructor(outcomeId: string) {
+    super(`Record outcome ${outcomeId} does not exist.`);
+    this.name = "OutcomeNotFoundError";
+    this.outcomeId = outcomeId;
+  }
+}
+
 type RecordOutcomeWithReviewTags = Prisma.RecordOutcomeGetPayload<{
   include: {
     reviewTags: {
@@ -182,7 +192,7 @@ export async function replaceReviewTags(outcomeId: string, labels: string[]) {
     });
 
     if (!outcome) {
-      throw new Error(`Record outcome ${outcomeId} does not exist.`);
+      throw new OutcomeNotFoundError(outcomeId);
     }
 
     await tx.recordOutcomeReviewTag.deleteMany({
@@ -213,7 +223,7 @@ export async function replaceReviewTags(outcomeId: string, labels: string[]) {
   const outcome = await getOutcomeById(outcomeId);
 
   if (!outcome) {
-    throw new Error(`Record outcome ${outcomeId} does not exist.`);
+    throw new OutcomeNotFoundError(outcomeId);
   }
 
   return mapRecordOutcome(outcome);
