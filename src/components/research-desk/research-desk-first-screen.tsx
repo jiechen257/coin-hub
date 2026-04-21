@@ -111,6 +111,7 @@ export function ResearchDeskFirstScreen({
             candles={chartCandles}
             outcomes={filteredOutcomes}
             records={records}
+            activeRecord={selectedRecord}
             selectedOutcomeId={selectedOutcome?.id ?? null}
             onSelectOutcome={onSelectOutcome}
             symbol={selection.symbol}

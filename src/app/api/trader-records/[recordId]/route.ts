@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError, z } from "zod";
+import { serializeRecord } from "@/modules/records/record-serializer";
 import {
   TraderRecordMutationError,
   TraderRecordNotFoundError,
@@ -71,7 +72,7 @@ export async function PATCH(
     }
 
     const record = await updateRecordFromInput(recordId, payload);
-    return NextResponse.json({ record });
+    return NextResponse.json({ record: serializeRecord(record) });
   } catch (error) {
     if (error instanceof ZodError || error instanceof SyntaxError) {
       return buildBadRequestResponse(error);

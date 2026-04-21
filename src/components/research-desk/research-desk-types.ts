@@ -1,3 +1,5 @@
+import type { RecordMorphology } from "@/modules/records/record-morphology";
+
 export type ResearchDeskSymbol = "BTC" | "ETH";
 export type ResearchDeskTimeframe = "15m" | "1h" | "4h" | "1d";
 export type ResearchDeskOutcomeResultLabel = "good" | "neutral" | "bad" | "pending";
@@ -100,6 +102,9 @@ export type ResearchDeskRecord = {
   recordType: "trade" | "view";
   sourceType: ResearchDeskSourceType;
   occurredAt: string;
+  startedAt?: string;
+  endedAt?: string;
+  morphology?: RecordMorphology | null;
   rawContent: string;
   notes: string | null;
   trader: ResearchDeskTrader;
@@ -174,6 +179,7 @@ export function buildRecordMarkers(
   return records
     .filter((record) => record.symbol === symbol)
     .map((record) => {
+      const startedAt = record.startedAt ?? record.occurredAt;
       const firstPlan = record.executionPlans[0];
       const tone =
         firstPlan?.side === "long"
@@ -184,7 +190,7 @@ export function buildRecordMarkers(
       const position = tone === "bearish" ? "aboveBar" : "belowBar";
 
       return {
-        time: record.occurredAt,
+        time: startedAt,
         position,
         label:
           record.recordType === "trade"

@@ -41,6 +41,9 @@ model TraderRecord {
   recordType     String
   sourceType     String
   occurredAt     DateTime
+  startedAt      DateTime?
+  endedAt        DateTime?
+  morphology     String?
   rawContent     String
   notes          String?
   archivedAt     DateTime?

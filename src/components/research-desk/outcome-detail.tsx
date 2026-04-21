@@ -18,10 +18,6 @@ type OutcomeDetailProps = {
   onSaveReviewTags: (reviewTags: string[]) => Promise<void>;
 };
 
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("zh-CN");
-}
-
 function formatPercent(value: number | null) {
   return value === null ? "未计算" : `${value.toFixed(2)}%`;
 }
@@ -79,18 +75,6 @@ export function OutcomeDetail({
 
       <CardContent className="grid gap-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <DetailField
-            title="观察开始"
-            value={formatDateTime(outcome.windowStartAt)}
-          />
-          <DetailField
-            title="观察结束"
-            value={formatDateTime(outcome.windowEndAt)}
-          />
-          <DetailField
-            title="窗口收益"
-            value={formatPercent(outcome.forwardReturnPercent)}
-          />
           <DetailField
             title="最大顺向波动"
             value={formatPercent(outcome.maxFavorableExcursionPercent)}

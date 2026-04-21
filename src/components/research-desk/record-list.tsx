@@ -2,6 +2,7 @@
 
 import { Archive } from "lucide-react";
 import { RecordEditorDialog } from "@/components/research-desk/record-editor-dialog";
+import { formatRecordTimeRange } from "@/components/research-desk/record-time-range";
 import type {
   ResearchDeskRecord,
   ResearchDeskTrader,
@@ -29,15 +30,6 @@ type RecordListProps = {
   onUpdateRecord: (recordId: string, input: UpdateRecordRequest) => Promise<void>;
   onArchiveRecord: (recordId: string) => Promise<void>;
 };
-
-function formatOccurredAt(value: string) {
-  return new Date(value).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function getRecordPreview(record: ResearchDeskRecord) {
   return (
@@ -103,7 +95,7 @@ export function RecordList({
                   </p>
 
                   <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                    <span>{formatOccurredAt(record.occurredAt)}</span>
+                    <span>{formatRecordTimeRange(record)}</span>
                     <span>{record.executionPlans.length} 个方案</span>
                   </div>
                 </button>

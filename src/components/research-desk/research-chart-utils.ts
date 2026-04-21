@@ -3,6 +3,7 @@ import type {
   ResearchDeskCandle,
   ResearchDeskOutcome,
 } from "@/components/research-desk/research-desk-types";
+import type { RecordMorphology } from "@/modules/records/record-morphology";
 import {
   formatOutcomeResultLabel,
   formatOutcomeSubjectType,
@@ -24,6 +25,7 @@ export type ResearchChartLaneItem = {
   outcome: ResearchDeskOutcome;
   label: string;
   meta: string;
+  displayIndex: number;
   rowIndex: number;
   leftPercent: number;
   widthPercent: number;
@@ -47,6 +49,31 @@ function clampPercent(value: number) {
 
 function getTimestampMs(value: string) {
   return new Date(value).getTime();
+}
+
+function collectMorphologyTimePoints(morphology?: RecordMorphology | null) {
+  if (!morphology) {
+    return [];
+  }
+
+  return morphology.items.flatMap((item) => {
+    switch (item.kind) {
+      case "trend":
+      case "bi":
+      case "segment":
+      case "pivotZone":
+      case "targetZone":
+      case "timeWindow":
+        return [getTimestampMs(item.startAt), getTimestampMs(item.endAt)];
+      case "keyLevel":
+        return [
+          ...(item.startAt ? [getTimestampMs(item.startAt)] : []),
+          ...(item.endAt ? [getTimestampMs(item.endAt)] : []),
+        ];
+      default:
+        return [];
+    }
+  });
 }
 
 function resolveBoundsRange(points: number[]) {
@@ -143,6 +170,7 @@ export function toTimeScaleRange(
 export function buildResearchChartTimeBounds(
   candles: ResearchDeskCandle[],
   outcomes: ResearchDeskOutcome[],
+  morphology?: RecordMorphology | null,
 ): ResearchChartTimeBounds {
   const points = [
     ...candles.map((candle) => getTimestampMs(candle.openTime)),
@@ -150,6 +178,7 @@ export function buildResearchChartTimeBounds(
       getTimestampMs(outcome.windowStartAt),
       getTimestampMs(outcome.windowEndAt),
     ]),
+    ...collectMorphologyTimePoints(morphology),
   ];
 
   if (points.length === 0) {
@@ -175,7 +204,7 @@ export function buildOutcomeLaneRows(
     return getTimestampMs(left.windowEndAt) - getTimestampMs(right.windowEndAt);
   });
 
-  for (const outcome of sortedOutcomes) {
+  for (const [displayIndex, outcome] of sortedOutcomes.entries()) {
     const laneWindow = buildLaneWindow(outcome, bounds);
     const rowIndex = rows.findIndex(
       (row) => laneWindow.leftPercent >= row.endPercent + LANE_GAP_PERCENT,
@@ -186,6 +215,7 @@ export function buildOutcomeLaneRows(
       outcome,
       label: buildLaneLabel(outcome),
       meta: buildLaneMeta(outcome),
+      displayIndex: displayIndex + 1,
       rowIndex: nextRowIndex,
       leftPercent: laneWindow.leftPercent,
       widthPercent: laneWindow.widthPercent,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recordMorphologySchema } from "@/modules/records/record-morphology";
 
 const priceSchema = z.number().nonnegative();
 
@@ -25,7 +26,7 @@ const updateTradeExecutionInputSchema = tradeExecutionInputSchema.extend({
   id: z.string().min(1).optional(),
 });
 
-const createRecordBaseSchema = {
+const recordBaseFields = {
   traderId: z.string().min(1),
   symbol: z.enum(["BTC", "ETH"]),
   sourceType: z.enum([
@@ -35,14 +36,75 @@ const createRecordBaseSchema = {
     "discord",
     "custom-import",
   ]),
-  occurredAt: z.string().datetime(),
+  occurredAt: z.string().datetime().optional(),
+  startedAt: z.string().datetime().optional(),
+  endedAt: z.string().datetime().optional(),
+  morphology: recordMorphologySchema.optional(),
   rawContent: z.string().min(1),
   notes: z.string().min(1).optional(),
 };
 
+function applyRecordTimeRange<T extends z.ZodTypeAny>(schema: T) {
+  return schema
+    .superRefine((input: any, ctx) => {
+      const hasStartedAt = typeof input.startedAt === "string";
+      const hasEndedAt = typeof input.endedAt === "string";
+      const hasOccurredAt = typeof input.occurredAt === "string";
+
+      if (!hasOccurredAt && !hasStartedAt && !hasEndedAt) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["startedAt"],
+          message: "记录开始时间不能为空",
+        });
+        return;
+      }
+
+      if (hasStartedAt !== hasEndedAt) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [hasStartedAt ? "endedAt" : "startedAt"],
+          message: "记录区间需要同时填写开始和结束时间",
+        });
+      }
+
+      if (hasStartedAt && hasEndedAt) {
+        const startedAtMs = new Date(input.startedAt as string).getTime();
+        const endedAtMs = new Date(input.endedAt as string).getTime();
+
+        if (endedAtMs < startedAtMs) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["endedAt"],
+            message: "结束时间不能早于开始时间",
+          });
+        }
+      }
+
+      if (hasOccurredAt && hasStartedAt && input.occurredAt !== input.startedAt) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["startedAt"],
+          message: "记录起点需与 occurredAt 保持一致",
+        });
+      }
+    })
+    .transform((input: any) => {
+      const startedAt = input.startedAt ?? input.occurredAt ?? "";
+      const endedAt = input.endedAt ?? input.occurredAt ?? startedAt;
+
+      return {
+        ...input,
+        occurredAt: startedAt,
+        startedAt,
+        endedAt,
+      };
+    });
+}
+
 const createTradeRecordSchema = z
   .object({
-    ...createRecordBaseSchema,
+    ...recordBaseFields,
     recordType: z.literal("trade"),
     trade: tradeExecutionInputSchema,
     plans: z.array(executionPlanInputSchema).max(0).default([]),
@@ -51,21 +113,23 @@ const createTradeRecordSchema = z
 
 const createViewRecordSchema = z
   .object({
-    ...createRecordBaseSchema,
+    ...recordBaseFields,
     recordType: z.literal("view"),
     plans: z.array(executionPlanInputSchema).min(1),
     trade: z.never().optional(),
   })
   .strict();
 
-export const createRecordSchema = z.discriminatedUnion("recordType", [
-  createTradeRecordSchema,
-  createViewRecordSchema,
-]);
+export const createRecordSchema = applyRecordTimeRange(
+  z.discriminatedUnion("recordType", [
+    createTradeRecordSchema,
+    createViewRecordSchema,
+  ]),
+);
 
 const updateTradeRecordSchema = z
   .object({
-    ...createRecordBaseSchema,
+    ...recordBaseFields,
     recordType: z.literal("trade"),
     trade: updateTradeExecutionInputSchema,
     plans: z.array(updateExecutionPlanInputSchema).max(0).default([]),
@@ -74,14 +138,16 @@ const updateTradeRecordSchema = z
 
 const updateViewRecordSchema = z
   .object({
-    ...createRecordBaseSchema,
+    ...recordBaseFields,
     recordType: z.literal("view"),
     plans: z.array(updateExecutionPlanInputSchema).min(1),
     trade: z.never().optional(),
   })
   .strict();
 
-export const updateRecordSchema = z.discriminatedUnion("recordType", [
-  updateTradeRecordSchema,
-  updateViewRecordSchema,
-]);
+export const updateRecordSchema = applyRecordTimeRange(
+  z.discriminatedUnion("recordType", [
+    updateTradeRecordSchema,
+    updateViewRecordSchema,
+  ]),
+);

@@ -1,6 +1,10 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import {
+  getRecordEndedAt,
+  getRecordStartedAt,
+} from "@/components/research-desk/record-time-range";
 import type {
   ResearchDeskOutcome,
   ResearchDeskRecord,
@@ -82,7 +86,10 @@ export function ResearchChartTimePopover({
 
         <div className="grid gap-3 sm:grid-cols-2">
           {record ? (
-            <DetailLine label="记录时间" value={formatDateTime(record.occurredAt)} />
+            <>
+              <DetailLine label="记录开始" value={formatDateTime(getRecordStartedAt(record))} />
+              <DetailLine label="记录结束" value={formatDateTime(getRecordEndedAt(record))} />
+            </>
           ) : null}
           <DetailLine label="观察开始" value={formatDateTime(outcome.windowStartAt)} />
           <DetailLine label="观察结束" value={formatDateTime(outcome.windowEndAt)} />

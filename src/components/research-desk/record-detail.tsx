@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ResearchDeskRecord } from "@/components/research-desk/research-desk-types";
 import { RecordDetailInsights } from "@/components/research-desk/record-detail-insights";
+import { formatRecordTimeRange } from "@/components/research-desk/record-time-range";
 import { formatPlanSide } from "@/components/research-desk/record-detail-utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -160,7 +161,7 @@ export function RecordDetail({ record, onSettlePlan }: RecordDetailProps) {
           <CardTitle>{record.trader.name}</CardTitle>
         </div>
         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          {new Date(record.occurredAt).toLocaleString("zh-CN")}
+          记录区间 {formatRecordTimeRange(record)}
         </p>
       </CardHeader>
 

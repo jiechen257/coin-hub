@@ -7,6 +7,10 @@ import type {
   ResearchDeskSymbol,
   ResearchDeskTrader,
 } from "@/components/research-desk/research-desk-types";
+import {
+  parseRecordMorphology,
+  type RecordMorphology,
+} from "@/modules/records/record-morphology";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -63,7 +67,9 @@ export type CreateRecordRequest =
       symbol: ResearchDeskSymbol;
       recordType: "trade";
       sourceType: "manual";
-      occurredAt: string;
+      startedAt: string;
+      endedAt: string;
+      morphology?: RecordMorphology;
       rawContent: string;
       notes?: string;
       trade: TradePayload;
@@ -74,7 +80,9 @@ export type CreateRecordRequest =
       symbol: ResearchDeskSymbol;
       recordType: "view";
       sourceType: "manual";
-      occurredAt: string;
+      startedAt: string;
+      endedAt: string;
+      morphology?: RecordMorphology;
       rawContent: string;
       notes?: string;
       plans: ViewPlanPayload[];
@@ -86,7 +94,9 @@ export type UpdateRecordRequest =
       symbol: ResearchDeskSymbol;
       recordType: "trade";
       sourceType: "manual" | "twitter" | "telegram" | "discord" | "custom-import";
-      occurredAt: string;
+      startedAt: string;
+      endedAt: string;
+      morphology?: RecordMorphology;
       rawContent: string;
       notes?: string;
       trade: TradePayload & {
@@ -99,7 +109,9 @@ export type UpdateRecordRequest =
       symbol: ResearchDeskSymbol;
       recordType: "view";
       sourceType: "manual" | "twitter" | "telegram" | "discord" | "custom-import";
-      occurredAt: string;
+      startedAt: string;
+      endedAt: string;
+      morphology?: RecordMorphology;
       rawContent: string;
       notes?: string;
       plans: Array<
@@ -225,7 +237,9 @@ export function RecordForm({
   const [selectedTraderId, setSelectedTraderId] = useState<string>("");
   const [symbol, setSymbol] = useState<ResearchDeskSymbol>("BTC");
   const [recordType, setRecordType] = useState<"trade" | "view">("trade");
-  const [occurredAt, setOccurredAt] = useState(toLocalDateTimeValue());
+  const [startedAt, setStartedAt] = useState(toLocalDateTimeValue());
+  const [endedAt, setEndedAt] = useState(toLocalDateTimeValue());
+  const [morphologyText, setMorphologyText] = useState("");
   const [rawContent, setRawContent] = useState("");
   const [entryPrice, setEntryPrice] = useState("");
   const [exitPrice, setExitPrice] = useState("");
@@ -274,7 +288,21 @@ export function RecordForm({
     setSelectedTraderId(initialRecord.traderId);
     setSymbol(initialRecord.symbol);
     setRecordType(initialRecord.recordType);
-    setOccurredAt(toLocalDateTimeValue(initialRecord.occurredAt));
+    setStartedAt(
+      toLocalDateTimeValue(initialRecord.startedAt ?? initialRecord.occurredAt),
+    );
+    setEndedAt(
+      toLocalDateTimeValue(
+        initialRecord.endedAt ??
+          initialRecord.startedAt ??
+          initialRecord.occurredAt,
+      ),
+    );
+    setMorphologyText(
+      initialRecord.morphology
+        ? JSON.stringify(initialRecord.morphology, null, 2)
+        : "",
+    );
     setRawContent(initialRecord.rawContent);
     setTradeSide(nextTradePlan?.side ?? "long");
     setEntryPrice(
@@ -345,6 +373,7 @@ export function RecordForm({
   }
 
   function resetRecordForm() {
+    const nextTime = toLocalDateTimeValue();
     setRawContent("");
     setEntryPrice("");
     setExitPrice("");
@@ -355,7 +384,9 @@ export function RecordForm({
     setTradeRiskText("");
     setTradeExitText("");
     setViewPlans([createEmptyViewPlan(0)]);
-    setOccurredAt(toLocalDateTimeValue());
+    setStartedAt(nextTime);
+    setEndedAt(nextTime);
+    setMorphologyText("");
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -370,6 +401,11 @@ export function RecordForm({
 
     if (!rawContent.trim()) {
       setError("先补充原始记录");
+      return;
+    }
+
+    if (new Date(endedAt).getTime() < new Date(startedAt).getTime()) {
+      setError("记录结束时间不能早于开始时间");
       return;
     }
 
@@ -394,6 +430,10 @@ export function RecordForm({
     setMessage(null);
 
     try {
+      const morphology = morphologyText.trim()
+        ? parseRecordMorphology(JSON.parse(morphologyText))
+        : undefined;
+
       if (recordType === "trade") {
         const tradePayload = {
           ...(isEditMode && tradePlan ? { id: tradePlan.id } : {}),
@@ -417,22 +457,26 @@ export function RecordForm({
             symbol,
             recordType: "trade",
             sourceType: initialRecord?.sourceType ?? "manual",
-            occurredAt: new Date(occurredAt).toISOString(),
+            startedAt: new Date(startedAt).toISOString(),
+            endedAt: new Date(endedAt).toISOString(),
+            morphology,
             rawContent: rawContent.trim(),
             trade: tradePayload,
             plans: [],
           });
         } else {
-        await onCreateRecord({
-          traderId,
-          symbol,
-          recordType: "trade",
-          sourceType: "manual",
-          occurredAt: new Date(occurredAt).toISOString(),
-          rawContent: rawContent.trim(),
-          trade: tradePayload,
-          plans: [],
-        });
+          await onCreateRecord({
+            traderId,
+            symbol,
+            recordType: "trade",
+            sourceType: "manual",
+            startedAt: new Date(startedAt).toISOString(),
+            endedAt: new Date(endedAt).toISOString(),
+            morphology,
+            rawContent: rawContent.trim(),
+            trade: tradePayload,
+            plans: [],
+          });
         }
       } else {
         const plans = viewPlans.map((plan) => ({
@@ -456,20 +500,24 @@ export function RecordForm({
             symbol,
             recordType: "view",
             sourceType: initialRecord?.sourceType ?? "manual",
-            occurredAt: new Date(occurredAt).toISOString(),
+            startedAt: new Date(startedAt).toISOString(),
+            endedAt: new Date(endedAt).toISOString(),
+            morphology,
             rawContent: rawContent.trim(),
             plans,
           });
         } else {
           await onCreateRecord({
-          traderId,
-          symbol,
-          recordType: "view",
-          sourceType: "manual",
-          occurredAt: new Date(occurredAt).toISOString(),
-          rawContent: rawContent.trim(),
+            traderId,
+            symbol,
+            recordType: "view",
+            sourceType: "manual",
+            startedAt: new Date(startedAt).toISOString(),
+            endedAt: new Date(endedAt).toISOString(),
+            morphology,
+            rawContent: rawContent.trim(),
             plans,
-        });
+          });
         }
       }
 
@@ -584,7 +632,7 @@ export function RecordForm({
           </Select>
         </FieldBlock>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-3">
           <FieldBlock label="资产">
             <Select value={symbol} onValueChange={(value) => setSymbol(value as ResearchDeskSymbol)}>
               <SelectTrigger>
@@ -597,12 +645,37 @@ export function RecordForm({
             </Select>
           </FieldBlock>
 
-          <FieldBlock label="记录时间" htmlFor="occurred-at">
+          <FieldBlock
+            label="记录开始"
+            htmlFor="started-at"
+            description="研究图默认用开始时间锚定记录。"
+          >
             <Input
-              id="occurred-at"
+              id="started-at"
               type="datetime-local"
-              value={occurredAt}
-              onChange={(event) => setOccurredAt(event.target.value)}
+              value={startedAt}
+              onChange={(event) => {
+                const nextStartedAt = event.target.value;
+
+                setStartedAt(nextStartedAt);
+
+                if (new Date(endedAt).getTime() < new Date(nextStartedAt).getTime()) {
+                  setEndedAt(nextStartedAt);
+                }
+              }}
+            />
+          </FieldBlock>
+
+          <FieldBlock
+            label="记录结束"
+            htmlFor="ended-at"
+            description="同一条观点可覆盖完整观察区间。"
+          >
+            <Input
+              id="ended-at"
+              type="datetime-local"
+              value={endedAt}
+              onChange={(event) => setEndedAt(event.target.value)}
             />
           </FieldBlock>
         </div>
@@ -647,6 +720,21 @@ export function RecordForm({
               value={rawContent}
               onChange={(event) => setRawContent(event.target.value)}
               className="min-h-28"
+            />
+          </FieldBlock>
+
+          <FieldBlock
+            label="形态标注"
+            htmlFor="morphology-text"
+            description="可选：用结构化 JSON 标注趋势、笔、线段、中枢、关键位、目标区和时间窗。"
+          >
+            <Textarea
+              id="morphology-text"
+              aria-label="形态标注"
+              placeholder={`{\n  "version": "v1",\n  "items": [\n    {\n      "kind": "keyLevel",\n      "label": "78333",\n      "timeframe": "4h",\n      "price": 78333\n    }\n  ]\n}`}
+              value={morphologyText}
+              onChange={(event) => setMorphologyText(event.target.value)}
+              className="min-h-32 font-mono text-xs leading-6"
             />
           </FieldBlock>
 

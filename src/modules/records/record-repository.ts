@@ -1,4 +1,8 @@
 import { db } from "@/lib/db";
+import {
+  serializeRecordMorphology,
+  type RecordMorphology,
+} from "@/modules/records/record-morphology";
 
 export type ExecutionPlanInput = {
   id?: string;
@@ -22,7 +26,9 @@ export type CreateRecordInput = {
   timeframe?: string;
   recordType: "trade" | "view";
   sourceType: "manual" | "twitter" | "telegram" | "discord" | "custom-import";
-  occurredAt: Date;
+  startedAt: Date;
+  endedAt: Date;
+  morphology?: RecordMorphology;
   rawContent: string;
   notes?: string;
   plans: ExecutionPlanInput[];
@@ -59,7 +65,10 @@ export async function createTraderRecord(input: CreateRecordInput) {
       timeframe: input.timeframe,
       recordType: input.recordType,
       sourceType: input.sourceType,
-      occurredAt: input.occurredAt,
+      occurredAt: input.startedAt,
+      startedAt: input.startedAt,
+      endedAt: input.endedAt,
+      morphology: serializeRecordMorphology(input.morphology),
       rawContent: input.rawContent,
       notes: input.notes,
       executionPlans: {
@@ -119,7 +128,10 @@ export async function updateTraderRecord(recordId: string, input: CreateRecordIn
         symbol: input.symbol,
         timeframe: input.timeframe,
         sourceType: input.sourceType,
-        occurredAt: input.occurredAt,
+        occurredAt: input.startedAt,
+        startedAt: input.startedAt,
+        endedAt: input.endedAt,
+        morphology: serializeRecordMorphology(input.morphology),
         rawContent: input.rawContent,
         notes: input.notes,
       },

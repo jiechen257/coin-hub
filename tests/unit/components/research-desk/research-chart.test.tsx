@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { render, screen } from "@testing-library/react";
+import { within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ResearchChart } from "@/components/research-desk/research-chart";
@@ -17,6 +18,7 @@ const chartMocks = vi.hoisted(() => {
   const removeChartMock = vi.fn();
   const addSeriesMock = vi.fn(() => ({
     setData: setDataMock,
+    priceToCoordinate: (price: number) => 320 - price / 400,
   }));
   const timeScaleMock = vi.fn(() => ({
     setVisibleRange: setVisibleRangeMock,
@@ -275,6 +277,15 @@ describe("ResearchChart", () => {
       from: toExpectedTimestamp("2026-04-19T00:00:00.000Z"),
       to: toExpectedTimestamp("2026-04-19T01:00:00.000Z"),
     });
+    expect(
+      document.querySelectorAll('[data-slot="research-chart-outcome-card"]'),
+    ).toHaveLength(2);
+    expect(
+      document.querySelectorAll('[data-slot="research-chart-outcome-card-duration"]'),
+    ).toHaveLength(2);
+    expect(
+      document.querySelectorAll('[data-slot="research-chart-outcome-strip"]'),
+    ).toHaveLength(2);
 
     const selectedLane = screen.getByRole("button", {
       name: /交易员甲 · 记录复盘标题.*正向 · 趋势跟随/i,
@@ -313,6 +324,9 @@ describe("ResearchChart", () => {
       }),
     ).toHaveAttribute("data-state", "selected");
     expect(
+      document.querySelector('[data-slot="research-chart-outcome-strip"][data-state="selected"]'),
+    ).toBeTruthy();
+    expect(
       screen.getByRole("button", {
         name: /交易员甲 · 记录复盘标题.*正向 · 趋势跟随/i,
       }),
@@ -348,7 +362,13 @@ describe("ResearchChart", () => {
     expect(screen.getByText("观察开始")).toBeInTheDocument();
     expect(screen.getByText("观察结束")).toBeInTheDocument();
     expect(screen.getByText("持续时长")).toBeInTheDocument();
-    expect(screen.getByText("1小时")).toBeInTheDocument();
+    expect(
+      within(
+        document.querySelector(
+          '[data-slot="research-chart-time-popover"]',
+        ) as HTMLElement,
+      ).getByText("1小时"),
+    ).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", {
@@ -467,5 +487,205 @@ describe("ResearchChart", () => {
     expect(
       container.querySelector('[data-slot="research-chart-window"]'),
     ).toBeNull();
+  });
+
+  it("renders price cards and time tracks for the active record without chart overlays", () => {
+    const recordsWithMorphology: ResearchDeskRecord[] = [
+      {
+        ...records[0],
+        morphology: {
+          version: "v1",
+          items: [
+            {
+              kind: "trend",
+              label: "4h 上涨观察段",
+              timeframe: "4h",
+              direction: "up",
+              startAt: "2026-04-19T00:00:00.000Z",
+              endAt: "2026-04-19T01:00:00.000Z",
+            },
+            {
+              kind: "keyLevel",
+              label: "78333",
+              timeframe: "4h",
+              price: 78333,
+            },
+            {
+              kind: "timeWindow",
+              label: "21-22 号时间窗",
+              timeframe: "15m",
+              startAt: "2026-04-19T00:15:00.000Z",
+              endAt: "2026-04-19T00:45:00.000Z",
+            },
+          ],
+        },
+      },
+      records[1],
+    ];
+
+    const { container } = render(
+      <ResearchChart
+        candles={candles}
+        outcomes={outcomes}
+        records={recordsWithMorphology}
+        activeRecord={recordsWithMorphology[0]}
+        selectedOutcomeId="outcome-1"
+        onSelectOutcome={vi.fn()}
+      />,
+    );
+
+    expect(
+      container.querySelector('[data-slot="research-chart-morphology-layer"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-slot="research-chart-morphology-legend"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-slot="research-chart-morphology-time-lanes"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelectorAll('[data-slot="research-chart-morphology-time-item"]'),
+    ).toHaveLength(2);
+    expect(
+      container.querySelectorAll('[data-slot="research-chart-morphology-time-card"]'),
+    ).toHaveLength(2);
+    expect(
+      container.querySelectorAll('[data-slot="research-chart-morphology-time-card-range"]'),
+    ).toHaveLength(2);
+    expect(
+      container.querySelectorAll('[data-slot="research-chart-morphology-time-card-duration"]'),
+    ).toHaveLength(2);
+    expect(
+      container.querySelectorAll('[data-slot="research-chart-morphology-chip"]'),
+    ).toHaveLength(1);
+    expect(
+      container.querySelectorAll('[data-slot="research-chart-morphology-item"]'),
+    ).toHaveLength(0);
+    expect(
+      container.querySelectorAll('[data-slot="research-chart-morphology-marker"]'),
+    ).toHaveLength(0);
+    expect(
+      container.querySelectorAll('[data-slot="research-chart-morphology-detail-label"]'),
+    ).toHaveLength(0);
+    expect(
+      container.querySelector('[data-slot="research-chart-morphology-item"][data-kind="trend"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-slot="research-chart-morphology-item"][data-kind="timeWindow"]'),
+    ).toBeNull();
+    expect(screen.getByText("4h 上涨观察段")).toBeInTheDocument();
+    expect(screen.getByText("78333")).toBeInTheDocument();
+    expect(screen.getByText("21-22 号时间窗")).toBeInTheDocument();
+  });
+
+  it("does not render chart overlays when hovering a price card", async () => {
+    const user = userEvent.setup();
+    const recordsWithMorphology: ResearchDeskRecord[] = [
+      {
+        ...records[0],
+        morphology: {
+          version: "v1",
+          items: [
+            {
+              kind: "keyLevel",
+              label: "78333",
+              timeframe: "4h",
+              price: 78333,
+            },
+          ],
+        },
+      },
+      records[1],
+    ];
+
+    const { container } = render(
+      <ResearchChart
+        candles={candles}
+        outcomes={outcomes}
+        records={recordsWithMorphology}
+        activeRecord={recordsWithMorphology[0]}
+        selectedOutcomeId="outcome-1"
+        onSelectOutcome={vi.fn()}
+      />,
+    );
+
+    const chip = container.querySelector('[data-slot="research-chart-morphology-chip"]');
+    expect(chip).toBeTruthy();
+    expect(
+      container.querySelector('[data-slot="research-chart-morphology-layer"]'),
+    ).toBeNull();
+    expect(
+      container.querySelectorAll('[data-slot="research-chart-morphology-detail-label"]'),
+    ).toHaveLength(0);
+
+    await user.hover(chip as HTMLElement);
+    expect(
+      container.querySelector('[data-slot="research-chart-morphology-layer"]'),
+    ).toBeNull();
+    expect(
+      container.querySelectorAll('[data-slot="research-chart-morphology-detail-label"]'),
+    ).toHaveLength(0);
+
+    await user.unhover(chip as HTMLElement);
+    expect(
+      container.querySelector('[data-slot="research-chart-morphology-layer"]'),
+    ).toBeNull();
+  });
+
+  it("highlights the matching time-lane item when hovering a time card", async () => {
+    const user = userEvent.setup();
+    const recordsWithMorphology: ResearchDeskRecord[] = [
+      {
+        ...records[0],
+        morphology: {
+          version: "v1",
+          items: [
+            {
+              kind: "trend",
+              label: "4h 上涨观察段",
+              timeframe: "4h",
+              direction: "up",
+              startAt: "2026-04-18T12:00:00.000Z",
+              endAt: "2026-04-19T12:00:00.000Z",
+            },
+            {
+              kind: "timeWindow",
+              label: "21-22 号时间窗",
+              timeframe: "15m",
+              startAt: "2026-04-20T12:00:00.000Z",
+              endAt: "2026-04-21T12:00:00.000Z",
+            },
+          ],
+        },
+      },
+      records[1],
+    ];
+
+    const { container } = render(
+      <ResearchChart
+        candles={candles}
+        outcomes={outcomes}
+        records={recordsWithMorphology}
+        activeRecord={recordsWithMorphology[0]}
+        selectedOutcomeId="outcome-1"
+        onSelectOutcome={vi.fn()}
+      />,
+    );
+
+    const timeCard = container.querySelector(
+      '[data-slot="research-chart-morphology-time-card"][data-kind="trend"]',
+    );
+    const timeItem = container.querySelector(
+      '[data-slot="research-chart-morphology-time-item"][data-kind="trend"]',
+    );
+
+    expect(timeCard).toBeTruthy();
+    expect(timeItem?.getAttribute("data-active")).toBe("false");
+
+    await user.hover(timeCard as HTMLElement);
+    expect(timeItem?.getAttribute("data-active")).toBe("true");
+
+    await user.unhover(timeCard as HTMLElement);
+    expect(timeItem?.getAttribute("data-active")).toBe("false");
   });
 });

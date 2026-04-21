@@ -1,11 +1,27 @@
 // @vitest-environment node
 
-import { describe, expect, it, vi } from "vitest";
+import { mkdtempSync, mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  findStaleWorkspaceChange,
   isProcessAlive,
   parseDevServerInfo,
   readRunningDevServer,
 } from "@/lib/dev-server-lock";
+
+const temporaryDirectories: string[] = [];
+
+afterEach(() => {
+  while (temporaryDirectories.length > 0) {
+    const directory = temporaryDirectories.pop();
+
+    if (directory) {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }
+});
 
 describe("parseDevServerInfo", () => {
   it("returns server info for valid lock content", () => {
@@ -96,6 +112,49 @@ describe("readRunningDevServer", () => {
           }),
         () => false,
       ),
+    ).toBeUndefined();
+  });
+});
+
+describe("findStaleWorkspaceChange", () => {
+  it("returns the newest changed file when the workspace is newer than the server", () => {
+    const workspaceRoot = mkdtempSync(join(tmpdir(), "coin-hub-dev-lock-"));
+    temporaryDirectories.push(workspaceRoot);
+    mkdirSync(join(workspaceRoot, "src"), { recursive: true });
+    const targetFile = join(workspaceRoot, "src/research-chart.tsx");
+    writeFileSync(targetFile, "export const ok = true;\n");
+    utimesSync(targetFile, 2_000, 2_000);
+
+    expect(
+      findStaleWorkspaceChange(workspaceRoot, {
+        pid: 11142,
+        port: 3000,
+        hostname: "localhost",
+        appUrl: "http://localhost:3000",
+        startedAt: 1_000_000,
+      }),
+    ).toEqual({
+      path: "src/research-chart.tsx",
+      mtimeMs: 2_000_000,
+    });
+  });
+
+  it("returns undefined when the running server is newer than the workspace", () => {
+    const workspaceRoot = mkdtempSync(join(tmpdir(), "coin-hub-dev-lock-"));
+    temporaryDirectories.push(workspaceRoot);
+    mkdirSync(join(workspaceRoot, "src"), { recursive: true });
+    const targetFile = join(workspaceRoot, "src/research-chart.tsx");
+    writeFileSync(targetFile, "export const ok = true;\n");
+    utimesSync(targetFile, 1_000, 1_000);
+
+    expect(
+      findStaleWorkspaceChange(workspaceRoot, {
+        pid: 11142,
+        port: 3000,
+        hostname: "localhost",
+        appUrl: "http://localhost:3000",
+        startedAt: 2_000_000,
+      }),
     ).toBeUndefined();
   });
 });

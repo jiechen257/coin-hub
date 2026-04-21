@@ -355,6 +355,126 @@ describe("record-service", () => {
     expect(payload.details.some((detail) => detail.path === "trade")).toBe(true);
   });
 
+  it("creates records with an explicit time range through /api/trader-records", async () => {
+    const trader = await db.traderProfile.create({ data: { name: "Trader Range" } });
+
+    const response = await postTraderRecordsRoute(
+      createJsonRequest("http://localhost/api/trader-records", {
+        traderId: trader.id,
+        symbol: "BTC",
+        recordType: "view",
+        sourceType: "manual",
+        startedAt: "2026-04-16T12:00:00.000Z",
+        endedAt: "2026-04-16T16:00:00.000Z",
+        rawContent: "4h 观察区间内等待 1h 下跌走完",
+        plans: [
+          {
+            label: "plan-a",
+            side: "short",
+            triggerText: "1h 反弹结束后继续下破",
+            entryText: "等待 15m 第二笔反弹结束",
+          },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(201);
+
+    const payload = (await response.json()) as {
+      record: {
+        occurredAt: string;
+        startedAt?: string;
+        endedAt?: string;
+      };
+    };
+    expect(payload.record.occurredAt).toBe("2026-04-16T12:00:00.000Z");
+    expect(payload.record.startedAt).toBe("2026-04-16T12:00:00.000Z");
+    expect(payload.record.endedAt).toBe("2026-04-16T16:00:00.000Z");
+  });
+
+  it("persists morphology annotations and returns them from create and list routes", async () => {
+    const trader = await db.traderProfile.create({ data: { name: "Trader Morphology" } });
+
+    const response = await postTraderRecordsRoute(
+      createJsonRequest("http://localhost/api/trader-records", {
+        traderId: trader.id,
+        symbol: "BTC",
+        recordType: "view",
+        sourceType: "manual",
+        startedAt: "2026-04-19T08:00:00.000Z",
+        endedAt: "2026-04-19T16:00:00.000Z",
+        rawContent: "4h 上涨观察段仍有结束风险",
+        morphology: {
+          version: "v1",
+          items: [
+            {
+              kind: "trend",
+              label: "4h 上涨观察段",
+              timeframe: "4h",
+              direction: "up",
+              startAt: "2026-04-18T20:00:00.000Z",
+              endAt: "2026-04-19T16:00:00.000Z",
+            },
+            {
+              kind: "keyLevel",
+              label: "78333",
+              timeframe: "4h",
+              price: 78333,
+            },
+          ],
+        },
+        plans: [
+          {
+            label: "plan-a",
+            side: "short",
+            triggerText: "1h 下跌延续",
+            entryText: "等 15m 反弹结束",
+          },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(201);
+
+    const payload = (await response.json()) as {
+      record: {
+        morphology?: {
+          version: string;
+          items: Array<{ kind: string; label?: string }>;
+        } | null;
+      };
+    };
+
+    expect(payload.record.morphology).toEqual({
+      version: "v1",
+      items: [
+        expect.objectContaining({
+          kind: "trend",
+          label: "4h 上涨观察段",
+        }),
+        expect.objectContaining({
+          kind: "keyLevel",
+          label: "78333",
+        }),
+      ],
+    });
+
+    const listResponse = await getTraderRecordsRoute();
+    const listPayload = (await listResponse.json()) as {
+      records: Array<{
+        morphology?: {
+          version: string;
+          items: Array<{ kind: string; label?: string }>;
+        } | null;
+      }>;
+    };
+
+    expect(listPayload.records[0]?.morphology?.items).toEqual([
+      expect.objectContaining({ kind: "trend", label: "4h 上涨观察段" }),
+      expect.objectContaining({ kind: "keyLevel", label: "78333" }),
+    ]);
+  });
+
   it("updates a record through /api/trader-records/[recordId]", async () => {
     const trader = await db.traderProfile.create({ data: { name: "Trader Update" } });
     const created = await createRecordFromInput({

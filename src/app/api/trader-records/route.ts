@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { serializeRecord } from "@/modules/records/record-serializer";
 import { createRecordFromInput } from "@/modules/records/record-service";
 import { ZodError } from "zod";
 
@@ -25,10 +26,10 @@ export async function GET() {
       archivedAt: null,
     },
     include: { trader: true, executionPlans: { include: { sample: true } } },
-    orderBy: { occurredAt: "desc" },
+    orderBy: { startedAt: "desc" },
   });
 
-  return NextResponse.json({ records });
+  return NextResponse.json({ records: records.map(serializeRecord) });
 }
 
 export async function POST(request: Request) {
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ record }, { status: 201 });
+    return NextResponse.json({ record: serializeRecord(record) }, { status: 201 });
   } catch (error) {
     if (error instanceof ZodError || error instanceof SyntaxError) {
       return buildBadRequestResponse(error);

@@ -1,6 +1,13 @@
 "use client";
 
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   CandlestickSeries,
   createChart,
@@ -23,6 +30,11 @@ import {
   toTimeScaleRange,
   toCandlestickSeriesData,
 } from "@/components/research-desk/research-chart-utils";
+import { formatOutcomeResultLabel } from "@/components/research-desk/outcome-copy";
+import {
+  ResearchChartMorphologyLegend,
+  ResearchChartMorphologyTimeLanes,
+} from "@/components/research-desk/research-chart-morphology";
 import { ResearchChartTimePopover } from "@/components/research-desk/research-chart-time-popover";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +51,7 @@ type ResearchChartProps = {
   candles: ResearchDeskCandle[];
   outcomes: ResearchDeskOutcome[];
   records: ResearchDeskRecord[];
+  activeRecord?: ResearchDeskRecord | null;
   selectedOutcomeId: string | null;
   onSelectOutcome: (outcomeId: string) => void;
   symbol?: ResearchDeskSymbol;
@@ -183,6 +196,54 @@ function buildRecordTrackTitle(record: ResearchDeskRecord) {
   return `${record.trader.name} · ${title}`;
 }
 
+const SHANGHAI_TIME_ZONE = "Asia/Shanghai";
+
+function formatTrackDateTime(value: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: SHANGHAI_TIME_ZONE,
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
+}
+
+function formatTrackDuration(startAt: string, endAt: string) {
+  const durationMs = Math.max(new Date(endAt).getTime() - new Date(startAt).getTime(), 0);
+  const totalMinutes = Math.round(durationMs / (60 * 1000));
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+  const segments: string[] = [];
+
+  if (days > 0) {
+    segments.push(`${days}天`);
+  }
+
+  if (hours > 0) {
+    segments.push(`${hours}小时`);
+  }
+
+  if (minutes > 0 && days === 0) {
+    segments.push(`${minutes}分`);
+  }
+
+  return segments.join(" ") || "1分";
+}
+
+function formatPercent(value: number | null) {
+  if (value === null) {
+    return "--";
+  }
+
+  return `${value.toFixed(2)}%`;
+}
+
+function formatOutcomeStripLabel(resultLabel: ResearchDeskOutcome["resultLabel"]) {
+  return formatOutcomeResultLabel(resultLabel);
+}
+
 type ResearchOutcomeLanesProps = {
   laneRows: ReturnType<typeof buildOutcomeLaneRows>;
   records: ResearchDeskRecord[];
@@ -199,6 +260,13 @@ function ResearchOutcomeLanes({
   const lanesRef = useRef<HTMLElement | null>(null);
   const [activePopoverOutcomeId, setActivePopoverOutcomeId] = useState<string | null>(
     null,
+  );
+  const laneItems = useMemo(
+    () =>
+      laneRows
+        .flatMap((row) => row.items)
+        .sort((left, right) => left.displayIndex - right.displayIndex),
+    [laneRows],
   );
 
   useEffect(() => {
@@ -258,93 +326,178 @@ function ResearchOutcomeLanes({
             结果轨道
           </p>
           <p className="text-sm text-muted-foreground">
-            结果条按时间窗口定位，选中项会同步高亮观察区间。
+            完整结果放在上方卡片，定位条只负责回答结果发生在什么时间。
           </p>
         </div>
       </div>
 
       {laneRows.length > 0 ? (
-        laneRows.map((row) => (
-          <div
-            key={row.id}
-            className="research-lane-row"
-            data-slot="research-chart-lane-row"
-          >
-            <div
-              className="research-lane-track"
-              data-slot="research-chart-lane-track"
-            >
-              {row.items.map((item) => {
-                const isSelected = item.id === selectedOutcomeId;
-                const matchedRecord = findRecordForOutcome(records, item.outcome);
-                const trackTitle = matchedRecord
-                  ? buildRecordTrackTitle(matchedRecord)
-                  : item.label;
+        <>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {laneItems.map((item) => {
+              const isSelected = item.id === selectedOutcomeId;
+              const matchedRecord = findRecordForOutcome(records, item.outcome);
+              const trackTitle = matchedRecord
+                ? buildRecordTrackTitle(matchedRecord)
+                : item.label;
+              const resultText = formatOutcomeResultLabel(item.outcome.resultLabel);
 
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="research-outcome-lane"
-                    data-result={item.outcome.resultLabel}
-                    data-state={isSelected ? "selected" : "idle"}
-                    aria-pressed={isSelected}
-                    style={{
-                      left: `${item.leftPercent}%`,
-                      width: `${item.widthPercent}%`,
-                    }}
-                    onClick={() => handleLaneClick(item.id)}
-                  >
-                    <span className="research-outcome-lane-content">
-                      <span className="truncate text-sm font-medium leading-4 text-foreground">
-                        {trackTitle}
-                      </span>
-                      <span className="truncate text-xs leading-4 text-muted-foreground">
-                        {item.meta}
-                      </span>
+              return (
+                <button
+                  key={`${item.id}-card`}
+                  type="button"
+                  className="grid gap-2 rounded-md border border-border/80 bg-background/96 p-3 text-left transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-[1px]"
+                  data-slot="research-chart-outcome-card"
+                  data-result={item.outcome.resultLabel}
+                  data-state={isSelected ? "selected" : "idle"}
+                  aria-pressed={isSelected}
+                  onClick={() => handleLaneClick(item.id)}
+                >
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] leading-4">
+                    <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-border/80 bg-white px-1 font-semibold text-foreground">
+                      {item.displayIndex.toString().padStart(2, "0")}
                     </span>
-                  </button>
-                );
-              })}
+                    <span className="rounded-sm bg-secondary px-1.5 py-0.5 text-muted-foreground">
+                      {item.outcome.timeframe}
+                    </span>
+                    <span className="rounded-sm border border-border/70 px-1.5 py-0.5 text-muted-foreground">
+                      {item.label}
+                    </span>
+                    <span className="rounded-sm px-1.5 py-0.5 font-medium text-foreground/80">
+                      {resultText}
+                    </span>
+                  </div>
 
-              {(() => {
-                const activeItem =
-                  row.items.find((item) => item.id === activePopoverOutcomeId) ?? null;
+                  <p
+                    className="break-words text-sm font-medium leading-5 text-foreground"
+                    data-slot="research-chart-outcome-card-title"
+                  >
+                    {trackTitle}
+                  </p>
 
-                if (!activeItem) {
-                  return null;
-                }
+                  <p
+                    className="text-xs leading-5 text-muted-foreground"
+                    data-slot="research-chart-outcome-card-meta"
+                  >
+                    {item.meta}
+                  </p>
 
-                const matchedRecord = findRecordForOutcome(records, activeItem.outcome);
-                const trackTitle = matchedRecord
-                  ? buildRecordTrackTitle(matchedRecord)
-                  : activeItem.label;
-                const align =
-                  activeItem.leftPercent + activeItem.widthPercent / 2 >= 50
-                    ? "end"
-                    : "start";
-                const popoverStyle =
-                  align === "end"
-                    ? {
-                        right: `${100 - (activeItem.leftPercent + activeItem.widthPercent)}%`,
-                      }
-                    : {
-                        left: `${activeItem.leftPercent}%`,
-                      };
-
-                return (
-                  <ResearchChartTimePopover
-                    outcome={activeItem.outcome}
-                    record={matchedRecord}
-                    title={trackTitle}
-                    align={align}
-                    style={popoverStyle}
-                  />
-                );
-              })()}
-            </div>
+                  <div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-4">
+                    <div className="grid gap-1">
+                      <span className="text-[11px] leading-4">开始</span>
+                      <span data-slot="research-chart-outcome-card-start">
+                        {formatTrackDateTime(item.outcome.windowStartAt)}
+                      </span>
+                    </div>
+                    <div className="grid gap-1">
+                      <span className="text-[11px] leading-4">结束</span>
+                      <span data-slot="research-chart-outcome-card-end">
+                        {formatTrackDateTime(item.outcome.windowEndAt)}
+                      </span>
+                    </div>
+                    <div className="grid gap-1">
+                      <span className="text-[11px] leading-4">持续</span>
+                      <span data-slot="research-chart-outcome-card-duration">
+                        {formatTrackDuration(
+                          item.outcome.windowStartAt,
+                          item.outcome.windowEndAt,
+                        )}
+                      </span>
+                    </div>
+                    <div className="grid gap-1">
+                      <span className="text-[11px] leading-4">窗口收益</span>
+                      <span data-slot="research-chart-outcome-card-return">
+                        {formatPercent(item.outcome.forwardReturnPercent)}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
-        ))
+
+          {laneRows.map((row) => (
+            <div
+              key={row.id}
+              className="research-lane-row"
+              data-slot="research-chart-lane-row"
+            >
+              <div
+                className="research-lane-track"
+                data-slot="research-chart-lane-track"
+              >
+                {row.items.map((item) => {
+                  const isSelected = item.id === selectedOutcomeId;
+                  const resultText = formatOutcomeStripLabel(item.outcome.resultLabel);
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="research-outcome-strip"
+                      data-slot="research-chart-outcome-strip"
+                      data-result={item.outcome.resultLabel}
+                      data-state={isSelected ? "selected" : "idle"}
+                      data-outcome-id={item.id}
+                      aria-pressed={isSelected}
+                      aria-label={`结果定位条 ${item.displayIndex.toString().padStart(2, "0")} ${resultText}`}
+                      style={{
+                        left: `${item.leftPercent}%`,
+                        width: `${item.widthPercent}%`,
+                      }}
+                      onClick={() => handleLaneClick(item.id)}
+                    >
+                      <span className="research-outcome-strip-content">
+                        <span className="research-outcome-strip-index">
+                          {item.displayIndex.toString().padStart(2, "0")}
+                        </span>
+                        <span className="truncate text-xs font-medium leading-5">
+                          {resultText}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+
+                {(() => {
+                  const activeItem =
+                    row.items.find((item) => item.id === activePopoverOutcomeId) ?? null;
+
+                  if (!activeItem) {
+                    return null;
+                  }
+
+                  const matchedRecord = findRecordForOutcome(records, activeItem.outcome);
+                  const trackTitle = matchedRecord
+                    ? buildRecordTrackTitle(matchedRecord)
+                    : activeItem.label;
+                  const align =
+                    activeItem.leftPercent + activeItem.widthPercent / 2 >= 50
+                      ? "end"
+                      : "start";
+                  const popoverStyle =
+                    align === "end"
+                      ? {
+                          right: `${100 - (activeItem.leftPercent + activeItem.widthPercent)}%`,
+                        }
+                      : {
+                          left: `${activeItem.leftPercent}%`,
+                        };
+
+                  return (
+                    <ResearchChartTimePopover
+                      outcome={activeItem.outcome}
+                      record={matchedRecord}
+                      title={trackTitle}
+                      align={align}
+                      style={popoverStyle}
+                    />
+                  );
+                })()}
+              </div>
+            </div>
+          ))}
+        </>
       ) : (
         <div className="rounded-md border border-dashed border-border/80 px-4 py-5 text-sm text-muted-foreground">
           当前切片还没有 outcome 轨道项。
@@ -358,6 +511,7 @@ export function ResearchChart({
   candles,
   outcomes,
   records,
+  activeRecord = null,
   selectedOutcomeId,
   onSelectOutcome,
   symbol,
@@ -366,10 +520,12 @@ export function ResearchChart({
 }: ResearchChartProps) {
   const chartHostRef = useRef<HTMLDivElement | null>(null);
   const chartHandleRef = useRef<ResearchChartHandle | null>(null);
+  const [activeMorphologyId, setActiveMorphologyId] = useState<string | null>(null);
   const seriesData = useMemo(() => toCandlestickSeriesData(candles), [candles]);
+  const activeMorphology = activeRecord?.morphology ?? null;
   const timeBounds = useMemo(
-    () => buildResearchChartTimeBounds(candles, outcomes),
-    [candles, outcomes],
+    () => buildResearchChartTimeBounds(candles, outcomes, activeMorphology),
+    [candles, outcomes, activeMorphology],
   );
   const visibleRange = useMemo(() => toTimeScaleRange(timeBounds), [timeBounds]);
   const hasTimelineData = candles.length > 0 || outcomes.length > 0;
@@ -388,6 +544,13 @@ export function ResearchChart({
       }) as CSSProperties,
     [],
   );
+  const handleHighlightMorphology = useCallback((id: string | null) => {
+    setActiveMorphologyId(id);
+  }, []);
+
+  useEffect(() => {
+    setActiveMorphologyId(null);
+  }, [activeRecord?.id]);
 
   useEffect(() => {
     const host = chartHostRef.current;
@@ -461,6 +624,12 @@ export function ResearchChart({
       <ResearchChartHeader symbol={symbol} timeframe={timeframe} />
 
       <div className="mt-4 grid gap-4" style={chartLayoutStyle}>
+        <ResearchChartMorphologyLegend
+          record={activeRecord}
+          activeMorphologyId={activeMorphologyId}
+          onHighlightMorphology={handleHighlightMorphology}
+        />
+
         <div className="research-chart-shell">
           {selectedLaneItem ? (
             <div
@@ -484,6 +653,13 @@ export function ResearchChart({
             className="h-[320px] w-full"
           />
         </div>
+
+        <ResearchChartMorphologyTimeLanes
+          record={activeRecord}
+          timeBounds={timeBounds}
+          activeMorphologyId={activeMorphologyId}
+          onHighlightMorphology={handleHighlightMorphology}
+        />
 
         <ResearchOutcomeLanes
           laneRows={laneRows}
