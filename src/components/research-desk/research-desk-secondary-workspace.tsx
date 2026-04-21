@@ -50,58 +50,56 @@ export function ResearchDeskSecondaryWorkspace({
   onRegenerateCandidates,
 }: ResearchDeskSecondaryWorkspaceProps) {
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
-      <div className="grid gap-6">
-        <Card>
-          <CardContent className="grid gap-5 p-5">
-            <div className="space-y-2">
-              <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
-                次级工作区
-              </p>
+    <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(340px,430px)]">
+      <div className="grid gap-4">
+        <Card className="overflow-hidden border-primary/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.94),rgba(239,246,255,0.72)_52%,rgba(255,247,237,0.82))]">
+          <CardContent className="grid gap-4 p-4">
+            <div className="space-y-1.5">
+              <p className="data-kicker">次级工作区</p>
               <div className="space-y-1">
                 <h2 className="text-lg font-semibold tracking-tight text-foreground">
                   新建记录与最近记录
                 </h2>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  新建记录、切换最近样本、继续结算方案的入口都留在这里。
+                <p className="support-copy text-sm">
+                  这里承接录入、切换、结算和策略沉淀。移动端强调单列可点区域，桌面端保持摘要与列表并排。
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-md border border-border/80 bg-secondary/20 p-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              <div className="rounded-[1.25rem] border border-border/70 bg-white/72 p-3.5">
+                <p className="data-kicker">
                   交易员
                 </p>
-                <p className="mt-2 text-2xl font-semibold text-foreground">
+                <p className="mt-2 text-[1.65rem] font-semibold tracking-tight text-foreground">
                   {traders.length}
                 </p>
               </div>
-              <div className="rounded-md border border-border/80 bg-secondary/20 p-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="rounded-[1.25rem] border border-border/70 bg-white/72 p-3.5">
+                <p className="data-kicker">
                   记录
                 </p>
-                <p className="mt-2 text-2xl font-semibold text-foreground">
+                <p className="mt-2 text-[1.65rem] font-semibold tracking-tight text-foreground">
                   {records.length}
                 </p>
               </div>
-              <div className="rounded-md border border-border/80 bg-secondary/20 p-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="rounded-[1.25rem] border border-border/70 bg-white/72 p-3.5">
+                <p className="data-kicker">
                   候选策略
                 </p>
-                <p className="mt-2 text-2xl font-semibold text-foreground">
+                <p className="mt-2 text-[1.65rem] font-semibold tracking-tight text-foreground">
                   {candidates.length}
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
               <RecordComposerDialog
                 traders={traders}
                 onCreateTrader={onCreateTrader}
                 onCreateRecord={onCreateRecord}
               />
-              <p className="text-xs leading-5 text-muted-foreground">
+              <p className="text-sm leading-6 text-muted-foreground">
                 新建后会自动切到该记录，首屏详情区同步更新。
               </p>
             </div>

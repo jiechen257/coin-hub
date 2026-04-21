@@ -32,12 +32,21 @@ async function seedResearchChartCandles(recordOccurredAtIso: string) {
           source: "playwright-e2e",
         };
       });
+      const firstOpenTime = candles[0]?.openTime;
+      const lastOpenTime = candles.at(-1)?.openTime;
 
       await db.candle.deleteMany({
         where: {
           symbol: "BTC",
           timeframe: "1h",
-          source: "playwright-e2e",
+          ...(firstOpenTime && lastOpenTime
+            ? {
+                openTime: {
+                  gte: firstOpenTime,
+                  lte: lastOpenTime,
+                },
+              }
+            : {}),
         },
       });
       await db.candle.createMany({ data: candles });
@@ -82,7 +91,7 @@ test("records a new research item from the first screen and saves a review tag",
   await page.getByRole("button", { name: "新增交易员", exact: true }).click();
   await expect(page.getByText("已新增交易员 Record Flow Trader")).toBeVisible();
 
-  await page.locator("#occurred-at").fill(RESEARCH_RECORD_LOCAL_TIME);
+  await page.locator("#started-at").fill(RESEARCH_RECORD_LOCAL_TIME);
   await page.getByLabel("原始记录").fill(RESEARCH_RECORD_RAW_CONTENT);
   await page.getByLabel("入场价").fill("100");
   await page.getByLabel("出场价").fill("104");
@@ -91,14 +100,18 @@ test("records a new research item from the first screen and saves a review tag",
   await expect(
     page.getByRole("heading", { name: "新建交易记录" }),
   ).toBeHidden();
-  await expect(page.getByRole("heading", { name: "Outcome 详情" })).toBeVisible();
-  await expect(page.locator(".research-outcome-lane")).toHaveCount(1);
-  await expect(page.getByText(RESEARCH_RECORD_RAW_CONTENT)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "结果判断与回看标签" }).first(),
+  ).toBeVisible();
+  await expect(page.locator(".research-lane-row")).toHaveCount(1);
+  await expect(
+    page.getByText(RESEARCH_RECORD_RAW_CONTENT, { exact: true }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: REVIEW_TAG_LABEL }).nth(1).click();
   await page.getByRole("button", { name: "保存标签" }).click();
 
-  await expect(page.getByText("当前 Review Tags")).toBeVisible();
+  await expect(page.getByText("当前 Review Tags").last()).toBeVisible();
 
   const toolbar = page.getByLabel("研究图控制条");
   await toolbar.getByRole("button", { name: REVIEW_TAG_LABEL }).click();

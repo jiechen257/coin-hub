@@ -10,7 +10,7 @@ export default async function HomePage() {
   });
 
   return (
-    <main className="mx-auto min-h-screen max-w-[1840px] px-4 py-6 sm:px-6 sm:py-8">
+    <main className="mx-auto flex min-h-screen w-full max-w-[1900px] flex-col px-3 py-4 sm:px-5 sm:py-6 xl:px-8 xl:py-8">
       <ResearchDesk initialData={initialData} />
     </main>
   );

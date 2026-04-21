@@ -4,25 +4,26 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors outline-none ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2",
+  "inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-[transform,background-color,border-color,color,box-shadow] duration-200 ease-out outline-none ring-offset-background disabled:pointer-events-none disabled:opacity-50 active:scale-[0.99] [&_svg]:pointer-events-none [&_svg]:shrink-0 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
+          "bg-primary text-primary-foreground shadow-[0_16px_32px_-18px_rgba(14,165,233,0.68)] hover:-translate-y-0.5 hover:bg-primary/92",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "bg-secondary text-secondary-foreground shadow-[0_12px_24px_-18px_rgba(148,163,184,0.45)] hover:-translate-y-0.5 hover:bg-secondary/88",
         outline:
-          "border border-border/80 bg-card/70 text-foreground hover:bg-accent hover:text-accent-foreground",
-        ghost: "text-foreground hover:bg-accent hover:text-accent-foreground",
+          "border border-border/80 bg-card/80 text-foreground shadow-[0_12px_24px_-20px_rgba(15,23,42,0.28)] hover:-translate-y-0.5 hover:bg-accent/85 hover:text-accent-foreground",
+        ghost:
+          "text-foreground hover:bg-accent/80 hover:text-accent-foreground",
         destructive:
-          "bg-destructive text-white shadow-sm hover:bg-destructive/90",
+          "bg-destructive text-white shadow-[0_16px_32px_-18px_rgba(220,38,38,0.52)] hover:-translate-y-0.5 hover:bg-destructive/92",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 px-3",
-        lg: "h-11 px-5",
-        icon: "h-10 w-10",
+        default: "h-11 px-4 py-2",
+        sm: "h-11 px-3 sm:h-9",
+        lg: "h-12 px-5",
+        icon: "h-11 w-11",
       },
     },
     defaultVariants: {

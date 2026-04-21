@@ -106,7 +106,9 @@ it("renders the rebuilt research desk first screen", async () => {
   expect(
     screen.getByRole("heading", { name: "记录 K 线图工作台" }),
   ).toBeInTheDocument();
-  expect(screen.getByText("TradingView 参考视图")).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: "TradingView 参考视图" }),
+  ).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "候选策略" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "新建记录" })).toBeInTheDocument();
   expect(screen.getByText("ResearchChart Mock")).toBeInTheDocument();
@@ -126,5 +128,7 @@ it("opens the record composer dialog from the workspace action card", async () =
 it("renders the TradingView secondary panel on the first screen", async () => {
   render(await HomePage());
 
-  expect(screen.getByText("TradingView 参考视图")).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: "TradingView 参考视图" }),
+  ).toBeInTheDocument();
 });

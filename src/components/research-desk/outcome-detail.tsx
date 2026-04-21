@@ -30,11 +30,11 @@ function DetailField({
   value: string;
 }) {
   return (
-    <div className="grid gap-1 rounded-md border border-border/80 bg-secondary/20 p-3">
-      <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+    <div className="grid gap-1 rounded-[1rem] border border-border/80 bg-secondary/20 p-2.5">
+      <p className="data-kicker">
         {title}
       </p>
-      <p className="text-sm leading-6 text-foreground">{value}</p>
+      <p className="text-sm leading-5 text-foreground">{value}</p>
     </div>
   );
 }
@@ -46,12 +46,13 @@ export function OutcomeDetail({
 }: OutcomeDetailProps) {
   if (!outcome) {
     return (
-      <Card>
-        <CardHeader>
+      <Card className="overflow-hidden">
+        <CardHeader className="space-y-2">
+          <p className="data-kicker">结果详情</p>
           <CardTitle>结果详情</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm leading-6 text-muted-foreground">
+          <p className="support-copy text-sm">
             先从本地研究图或结果过滤里选中一个 outcome。
           </p>
         </CardContent>
@@ -60,21 +61,24 @@ export function OutcomeDetail({
   }
 
   return (
-    <Card>
-      <CardHeader className="space-y-3">
+    <Card className="overflow-hidden">
+      <CardHeader className="space-y-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{formatOutcomeResultLabel(outcome.resultLabel)}</Badge>
+          <Badge variant="success">{formatOutcomeResultLabel(outcome.resultLabel)}</Badge>
           <Badge variant="outline">{formatOutcomeWindowType(outcome.windowType)}</Badge>
           <Badge variant="outline">规则 {outcome.ruleVersion}</Badge>
         </div>
-        <CardTitle>结果详情</CardTitle>
-        <p className="text-sm leading-6 text-muted-foreground">
+        <div className="space-y-1.5">
+          <p className="data-kicker">结果详情</p>
+          <CardTitle>结果判断与回看标签</CardTitle>
+        </div>
+        <p className="support-copy text-sm">
           {outcome.resultReason}
         </p>
       </CardHeader>
 
-      <CardContent className="grid gap-4">
-        <div className="grid gap-3 sm:grid-cols-2">
+      <CardContent className="grid gap-3.5">
+        <div className="grid gap-2.5 sm:grid-cols-2">
           <DetailField
             title="最大顺向波动"
             value={formatPercent(outcome.maxFavorableExcursionPercent)}
@@ -93,11 +97,19 @@ export function OutcomeDetail({
           />
         </div>
 
-        <ReviewTagEditor
-          value={outcome.reviewTags}
-          options={reviewTagOptions}
-          onSave={onSaveReviewTags}
-        />
+        <div className="rounded-[1.25rem] border border-border/70 bg-white/72 p-3.5">
+          <div className="mb-3 space-y-0.5">
+            <p className="text-sm font-semibold text-foreground">Review Tag 编辑器</p>
+            <p className="text-sm leading-5 text-muted-foreground">
+              先补标签，再回到总览观察过滤结果是否形成稳定主题。
+            </p>
+          </div>
+          <ReviewTagEditor
+            value={outcome.reviewTags}
+            options={reviewTagOptions}
+            onSave={onSaveReviewTags}
+          />
+        </div>
       </CardContent>
     </Card>
   );

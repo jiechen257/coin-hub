@@ -351,6 +351,18 @@ function buildChartSliceFromData(
   };
 }
 
+function expectPanelsToContain(testId: string, value: string) {
+  screen.getAllByTestId(testId).forEach((element) => {
+    expect(element).toHaveTextContent(value);
+  });
+}
+
+function expectPanelsNotToContain(testId: string, value: string) {
+  screen.getAllByTestId(testId).forEach((element) => {
+    expect(element).not.toHaveTextContent(value);
+  });
+}
+
 beforeEach(() => {
   vi.restoreAllMocks();
 });
@@ -365,7 +377,9 @@ it("renders the outcome-first first screen around the research chart", () => {
   expect(
     screen.getByRole("heading", { name: "记录 K 线图工作台" }),
   ).toBeInTheDocument();
-  expect(screen.getByText("TradingView 参考视图")).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: "TradingView 参考视图" }),
+  ).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "新建记录" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "候选策略" })).toBeInTheDocument();
 });
@@ -381,10 +395,8 @@ it("keeps the clicked record selected when that record has no outcome", async ()
     }),
   );
 
-  expect(screen.getByTestId("record-detail")).toHaveTextContent(
-    "record:record-3:没有 outcome 的记录",
-  );
-  expect(screen.getByTestId("outcome-detail")).toHaveTextContent("outcome:none");
+  expectPanelsToContain("record-detail", "record:record-3:没有 outcome 的记录");
+  expectPanelsToContain("outcome-detail", "outcome:none");
   expect(screen.getByTestId("research-chart")).toHaveTextContent("研究图 mock none");
 });
 
@@ -395,13 +407,9 @@ it("maps a plan outcome back to its owning record when recordId is null", async 
 
   await user.click(screen.getByRole("button", { name: "选择 outcome outcome-bad" }));
 
-  expect(screen.getByTestId("outcome-detail")).toHaveTextContent("outcome:outcome-bad");
-  expect(screen.getByTestId("record-detail")).toHaveTextContent(
-    "record:record-2:第二条记录",
-  );
-  expect(screen.getByTestId("record-detail")).not.toHaveTextContent(
-    "record:record-1:第一条记录",
-  );
+  expectPanelsToContain("outcome-detail", "outcome:outcome-bad");
+  expectPanelsToContain("record-detail", "record:record-2:第二条记录");
+  expectPanelsNotToContain("record-detail", "record:record-1:第一条记录");
 });
 
 it("refreshes chart slice after creating a record and keeps the new record selected when no outcome exists", async () => {
@@ -444,10 +452,8 @@ it("refreshes chart slice after creating a record and keeps the new record selec
     );
   });
 
-  expect(screen.getByTestId("record-detail")).toHaveTextContent(
-    "record:record-4:第四条记录",
-  );
-  expect(screen.getByTestId("outcome-detail")).toHaveTextContent("outcome:none");
+  expectPanelsToContain("record-detail", "record:record-4:第四条记录");
+  expectPanelsToContain("outcome-detail", "outcome:none");
 });
 
 it("selects the refreshed outcome for the new record when the chart slice already contains it", async () => {
@@ -490,14 +496,10 @@ it("selects the refreshed outcome for the new record when the chart slice alread
   await user.click(screen.getByRole("button", { name: "新建记录" }));
 
   await waitFor(() => {
-    expect(screen.getByTestId("outcome-detail")).toHaveTextContent(
-      "outcome:outcome-new",
-    );
+    expectPanelsToContain("outcome-detail", "outcome:outcome-new");
   });
 
-  expect(screen.getByTestId("record-detail")).toHaveTextContent(
-    "record:record-5:第三条记录",
-  );
+  expectPanelsToContain("record-detail", "record:record-5:第三条记录");
   expect(screen.getByTestId("research-chart")).toHaveTextContent(
     "研究图 mock outcome-new",
   );
@@ -508,13 +510,13 @@ it("updates summary count and tag heat from the active filter set", async () => 
 
   render(<ResearchDesk initialData={createInitialData()} />);
 
-  await user.click(screen.getByRole("button", { name: "good" }));
+  await user.click(screen.getByRole("button", { name: "正向结果" }));
 
   expect(screen.getByText("1 条正向结果")).toBeInTheDocument();
   expect(screen.getByText("趋势跟随 1")).toBeInTheDocument();
   expect(screen.queryByText("止损纪律差 1")).not.toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "all" }));
+  await user.click(screen.getByRole("button", { name: "全部结果" }));
   await user.click(screen.getByRole("button", { name: "止损纪律差" }));
 
   expect(screen.getByText("1 条结果")).toBeInTheDocument();
@@ -590,9 +592,7 @@ it("refreshes record detail and candidates after editing a record", async () => 
   await user.click(screen.getByRole("button", { name: "编辑 record-2" }));
 
   await waitFor(() => {
-    expect(screen.getByTestId("record-detail")).toHaveTextContent(
-      "record:record-2:第二条记录-已更新",
-    );
+    expectPanelsToContain("record-detail", "record:record-2:第二条记录-已更新");
   });
 
   expect(fetchMock).toHaveBeenCalledWith(

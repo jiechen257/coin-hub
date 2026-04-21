@@ -48,17 +48,19 @@ export function StrategyCandidateList({
 
   return (
     <>
-      <Card>
-        <CardHeader className="flex-row items-start justify-between gap-3">
+      <Card className="overflow-hidden">
+        <CardHeader className="flex-row items-start justify-between gap-2.5">
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
-              策略区
-            </p>
+            <p className="data-kicker">策略区</p>
             <CardTitle>候选策略</CardTitle>
+            <p className="support-copy text-sm">
+              先看规则骨架，再决定是否打开样本文本。移动端把详情留在弹窗里，列表保持紧凑可扫。
+            </p>
           </div>
           <Button
             type="button"
             variant="outline"
+            className="w-full sm:w-auto"
             onClick={() => void onRegenerate()}
             disabled={isLoading}
           >
@@ -71,7 +73,7 @@ export function StrategyCandidateList({
           </Button>
         </CardHeader>
 
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-2.5">
           {message ? (
             <Alert variant="success">
               <AlertTitle>候选策略已刷新</AlertTitle>
@@ -87,7 +89,7 @@ export function StrategyCandidateList({
           ) : null}
 
           {candidates.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border/80 px-4 py-8 text-sm text-muted-foreground">
+            <div className="rounded-[1.25rem] border border-dashed border-border/80 px-4 py-8 text-sm text-muted-foreground">
               还没有候选策略，先结算样本再归纳。
             </div>
           ) : null}
@@ -98,7 +100,7 @@ export function StrategyCandidateList({
                 <AccordionItem
                   key={candidate.id}
                   value={candidate.id}
-                  className="rounded-lg border border-border/80 bg-secondary/30 px-4"
+                  className="rounded-[1.25rem] border border-border/80 bg-secondary/28 px-3.5"
                 >
                   <AccordionTrigger className="py-4 hover:no-underline">
                     <div className="grid min-w-0 flex-1 gap-2 text-left">
@@ -121,39 +123,40 @@ export function StrategyCandidateList({
                   </AccordionTrigger>
 
                   <AccordionContent className="pb-4">
-                    <div className="grid gap-4">
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-md border border-border/80 bg-background/70 p-3">
-                          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    <div className="grid gap-3">
+                      <div className="grid gap-2.5 sm:grid-cols-3">
+                        <div className="rounded-[1rem] border border-border/80 bg-background/70 p-2.5">
+                          <p className="data-kicker">
                             入场规则
                           </p>
-                          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                          <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
                             {candidate.entryText}
                           </p>
                         </div>
-                        <div className="rounded-md border border-border/80 bg-background/70 p-3">
-                          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                        <div className="rounded-[1rem] border border-border/80 bg-background/70 p-2.5">
+                          <p className="data-kicker">
                             风控规则
                           </p>
-                          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                          <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
                             {candidate.riskText ?? "手动定义"}
                           </p>
                         </div>
-                        <div className="rounded-md border border-border/80 bg-background/70 p-3">
-                          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                        <div className="rounded-[1rem] border border-border/80 bg-background/70 p-2.5">
+                          <p className="data-kicker">
                             离场规则
                           </p>
-                          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                          <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
                             {candidate.exitText ?? "手动定义"}
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
+                          className="w-full sm:w-auto"
                           onClick={() => setActiveCandidateId(candidate.id)}
                         >
                           查看样本原文
@@ -179,7 +182,7 @@ export function StrategyCandidateList({
           }
         }}
       >
-        <DialogContent className="max-h-[88vh] p-0">
+        <DialogContent className="max-h-[92vh] max-w-3xl p-0">
           <DialogHeader>
             <DialogTitle>策略样本</DialogTitle>
             <DialogDescription>
@@ -189,11 +192,11 @@ export function StrategyCandidateList({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="max-h-[calc(88vh-108px)] space-y-3 overflow-y-auto px-6 py-5">
+          <div className="max-h-[calc(92vh-108px)] space-y-3 overflow-y-auto px-5 py-5 sm:px-6">
             {activeCandidate?.sampleRefs.map((sampleRef) => (
               <article
                 key={sampleRef.sampleId}
-                className="space-y-3 rounded-lg border border-border/80 bg-secondary/20 p-4"
+                className="space-y-3 rounded-[1.25rem] border border-border/80 bg-secondary/20 p-4"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline">{sampleRef.traderName}</Badge>

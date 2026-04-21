@@ -59,11 +59,11 @@ function DetailBlock({
   content: string;
 }) {
   return (
-    <div className="grid gap-1 rounded-md border border-border/80 bg-secondary/20 p-3">
-      <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+    <div className="grid gap-1 rounded-[1rem] border border-border/80 bg-secondary/20 p-2.5">
+      <p className="data-kicker">
         {title}
       </p>
-      <p className="text-sm leading-6 text-muted-foreground">{content}</p>
+      <p className="text-sm leading-5 text-muted-foreground">{content}</p>
     </div>
   );
 }
@@ -84,12 +84,13 @@ export function RecordDetail({ record, onSettlePlan }: RecordDetailProps) {
 
   if (!record) {
     return (
-      <Card>
-        <CardHeader>
+      <Card className="overflow-hidden">
+        <CardHeader className="space-y-2">
+          <p className="data-kicker">记录详情</p>
           <CardTitle>记录详情</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm leading-6 text-muted-foreground">
+          <p className="support-copy text-sm">
             选中结果条或最近记录后，这里会显示对应方案和样本状态。
           </p>
         </CardContent>
@@ -149,15 +150,16 @@ export function RecordDetail({ record, onSettlePlan }: RecordDetailProps) {
   }
 
   return (
-    <Card>
-      <CardHeader className="space-y-3">
-        <div className="space-y-2">
+    <Card className="overflow-hidden">
+      <CardHeader className="space-y-2.5">
+        <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">{record.symbol}</Badge>
             <Badge variant="outline">{formatPlanStatus(record.recordType)}</Badge>
             <Badge variant="outline">{record.sourceType}</Badge>
             {record.timeframe ? <Badge variant="outline">{record.timeframe}</Badge> : null}
           </div>
+          <p className="data-kicker">记录详情</p>
           <CardTitle>{record.trader.name}</CardTitle>
         </div>
         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
@@ -165,7 +167,7 @@ export function RecordDetail({ record, onSettlePlan }: RecordDetailProps) {
         </p>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3.5">
         {settleMessage ? (
           <Alert variant="success">
             <AlertTitle>样本已更新</AlertTitle>
@@ -182,7 +184,7 @@ export function RecordDetail({ record, onSettlePlan }: RecordDetailProps) {
 
         <RecordDetailInsights record={record} />
 
-        <section className="space-y-3">
+        <section className="space-y-2.5">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-medium text-foreground">情景推演</h3>
             <Badge variant="outline">{record.executionPlans.length} 个方案</Badge>
@@ -198,7 +200,7 @@ export function RecordDetail({ record, onSettlePlan }: RecordDetailProps) {
                 <AccordionItem
                   key={plan.id}
                   value={plan.id}
-                  className="rounded-lg border border-border/80 bg-secondary/30 px-4"
+                  className="rounded-[1.25rem] border border-border/80 bg-secondary/30 px-4"
                 >
                   <AccordionTrigger className="py-4 hover:no-underline">
                     <div className="grid min-w-0 flex-1 gap-2 text-left">
@@ -264,7 +266,7 @@ export function RecordDetail({ record, onSettlePlan }: RecordDetailProps) {
                           </div>
                         </div>
                       ) : (
-                        <div className="grid gap-3 rounded-lg border border-border/80 bg-card/70 p-4">
+                        <div className="grid gap-3 rounded-[1.25rem] border border-border/80 bg-card/70 p-4">
                           <div className="flex flex-wrap items-center gap-2">
                             {plan.entryPrice !== null ? (
                               <Badge variant="outline">计划开仓 {plan.entryPrice}</Badge>
