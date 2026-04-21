@@ -13,6 +13,7 @@ import {
   serializeRecord,
   serializeTrader,
 } from "@/modules/records/record-serializer";
+import { ensureResearchDeskSchema } from "@/lib/research-desk-schema-bootstrap";
 
 function prepareResearchDeskLoaderEnv() {
   if (process.env.VITEST) {
@@ -44,6 +45,7 @@ function buildEmptyResearchDeskPayload(
 }
 
 export async function listSerializedStrategyCandidates() {
+  await ensureResearchDeskSchema();
   const db = await getResearchDeskDb();
   const candidates = await db.strategyCandidate.findMany({
     include: {
@@ -105,6 +107,7 @@ export async function loadResearchDeskPayload(input: {
   symbol: ResearchDeskSymbol;
   timeframe: ResearchDeskTimeframe;
 }): Promise<ResearchDeskPayload> {
+  await ensureResearchDeskSchema();
   const chartSlice = await loadResearchDeskChartSlice(input);
 
   try {

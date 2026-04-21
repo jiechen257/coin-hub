@@ -9,6 +9,7 @@ import {
   archiveRecordById,
   updateRecordFromInput,
 } from "@/modules/records/record-service";
+import { ensureResearchDeskSchema } from "@/lib/research-desk-schema-bootstrap";
 
 const archiveRecordSchema = z
   .object({
@@ -56,6 +57,7 @@ export async function PATCH(
   context: { params: Promise<{ recordId: string }> },
 ) {
   try {
+    await ensureResearchDeskSchema();
     const { recordId } = await context.params;
     const payload = await request.json();
 

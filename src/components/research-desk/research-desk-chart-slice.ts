@@ -2,6 +2,7 @@ import {
   DEFAULT_REVIEW_TAGS,
   getReviewTagKind,
 } from "@/modules/outcomes/review-tag-catalog";
+import { ensureResearchDeskSchema } from "@/lib/research-desk-schema-bootstrap";
 import type {
   ResearchDeskChartSlicePayload,
   ResearchDeskOutcome,
@@ -215,6 +216,7 @@ export async function loadResearchDeskChartSlice(input: {
   symbol: ResearchDeskSymbol;
   timeframe: ResearchDeskTimeframe;
 }): Promise<ResearchDeskChartSlicePayload> {
+  await ensureResearchDeskSchema();
   const {
     db,
     candleRepository,

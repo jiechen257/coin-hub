@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { serializeRecord } from "@/modules/records/record-serializer";
 import { createRecordFromInput } from "@/modules/records/record-service";
 import { ZodError } from "zod";
+import { ensureResearchDeskSchema } from "@/lib/research-desk-schema-bootstrap";
 
 function buildBadRequestResponse(error: ZodError | SyntaxError) {
   return NextResponse.json(
@@ -21,6 +22,7 @@ function buildBadRequestResponse(error: ZodError | SyntaxError) {
 }
 
 export async function GET() {
+  await ensureResearchDeskSchema();
   const records = await db.traderRecord.findMany({
     where: {
       archivedAt: null,
@@ -34,6 +36,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    await ensureResearchDeskSchema();
     const createdRecord = await createRecordFromInput(await request.json());
     const record = await db.traderRecord.findUniqueOrThrow({
       where: { id: createdRecord.id },
