@@ -1,12 +1,57 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { resolveLocalDevelopmentEnv } from "@/lib/database-runtime";
+import { config as loadDotenv } from "dotenv";
+import { parseDevCliArgs } from "@/lib/dev-command-args";
+import { resolveLocalDevelopmentRuntime } from "@/lib/database-runtime";
 import {
   findStaleWorkspaceChange,
   isProcessAlive,
   readRunningDevServer,
 } from "@/lib/dev-server-lock";
+
+function loadNextStyleEnv() {
+  const nodeEnv =
+    process.env.NODE_ENV === "production"
+      ? "production"
+      : process.env.NODE_ENV === "test"
+        ? "test"
+        : "development";
+  const envFiles = [
+    `.env.${nodeEnv}.local`,
+    ...(nodeEnv === "test" ? [] : [".env.local"]),
+    `.env.${nodeEnv}`,
+    ".env",
+  ];
+
+  for (const envFile of envFiles) {
+    const envPath = resolve(process.cwd(), envFile);
+
+    if (!existsSync(envPath)) {
+      continue;
+    }
+
+    loadDotenv({
+      path: envPath,
+      override: false,
+      quiet: true,
+    });
+  }
+}
+
+loadNextStyleEnv();
+
+function printDatabaseBanner(target: string, location: string) {
+  const locationLabel = target === "local" ? "SQLite file" : "Turso URL";
+
+  console.log(`Coin Hub database target: ${target}`);
+  console.log(`${locationLabel}: ${location}`);
+
+  if (target === "production") {
+    console.log("Warning: this dev session will read and write the production database.");
+  }
+}
 
 async function waitForProcessExit(pid: number, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
@@ -48,9 +93,10 @@ async function stopRunningServer(pid: number) {
 
 async function main() {
   const lockfilePath = resolve(process.cwd(), ".next/dev/lock");
-  const cliArgs = process.argv.slice(2);
-  const shouldRestart = cliArgs.includes("--restart");
-  const forwardedArgs = cliArgs.filter((arg) => arg !== "--restart");
+  const { shouldRestart, targetOverride, forwardedArgs } = parseDevCliArgs(
+    process.argv.slice(2),
+  );
+  const runtime = resolveLocalDevelopmentRuntime(process.env, targetOverride);
   const runningServer = readRunningDevServer(lockfilePath);
 
   if (runningServer) {
@@ -68,6 +114,10 @@ async function main() {
         );
       }
 
+      console.log(
+        `Requested database target: ${runtime.target} (${runtime.location}). Run the same command with --restart to apply it.`,
+      );
+
       process.exit(0);
     }
 
@@ -77,9 +127,10 @@ async function main() {
 
   const nextBin = resolve(process.cwd(), "node_modules/next/dist/bin/next");
   const nextArgs = [nextBin, "dev", ...forwardedArgs];
+  printDatabaseBanner(runtime.target, runtime.location);
   const child = spawn(process.execPath, nextArgs, {
     cwd: process.cwd(),
-    env: resolveLocalDevelopmentEnv(process.env) as NodeJS.ProcessEnv,
+    env: runtime.env as NodeJS.ProcessEnv,
     stdio: "inherit",
   });
 

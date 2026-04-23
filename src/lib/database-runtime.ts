@@ -1,9 +1,22 @@
 export const DEFAULT_LOCAL_DATABASE_URL = "file:./prisma/dev.db";
+export const LOCAL_DEVELOPMENT_DATABASE_TARGETS = [
+  "daily",
+  "production",
+  "local",
+] as const;
+
+export type LocalDevelopmentDatabaseTarget =
+  (typeof LOCAL_DEVELOPMENT_DATABASE_TARGETS)[number];
 
 type DatabaseRuntimeEnv = {
   [key: string]: string | undefined;
   DATABASE_URL?: string;
   LOCAL_DATABASE_URL?: string;
+  COIN_HUB_DEV_DATABASE_TARGET?: string;
+  TURSO_DAILY_DATABASE_URL?: string;
+  TURSO_DAILY_AUTH_TOKEN?: string;
+  TURSO_PRODUCTION_DATABASE_URL?: string;
+  TURSO_PRODUCTION_AUTH_TOKEN?: string;
   TURSO_DATABASE_URL?: string;
   TURSO_AUTH_TOKEN?: string;
 };
@@ -22,6 +35,56 @@ export type DatabaseRuntimeConfig =
 function readEnvValue(value: string | undefined) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function parseLocalDevelopmentTarget(
+  value: string | undefined,
+  source: "--target" | "COIN_HUB_DEV_DATABASE_TARGET",
+) {
+  const normalizedValue = readEnvValue(value)?.toLowerCase();
+
+  if (!normalizedValue) {
+    return undefined;
+  }
+
+  if (
+    LOCAL_DEVELOPMENT_DATABASE_TARGETS.includes(
+      normalizedValue as LocalDevelopmentDatabaseTarget,
+    )
+  ) {
+    return normalizedValue as LocalDevelopmentDatabaseTarget;
+  }
+
+  throw new Error(
+    `${source} must be one of ${LOCAL_DEVELOPMENT_DATABASE_TARGETS.join(", ")}.`,
+  );
+}
+
+function resolveTargetTursoSource(
+  env: DatabaseRuntimeEnv,
+  target: Exclude<LocalDevelopmentDatabaseTarget, "local">,
+) {
+  const urlKey =
+    target === "daily"
+      ? "TURSO_DAILY_DATABASE_URL"
+      : "TURSO_PRODUCTION_DATABASE_URL";
+  const tokenKey =
+    target === "daily" ? "TURSO_DAILY_AUTH_TOKEN" : "TURSO_PRODUCTION_AUTH_TOKEN";
+  const url = readEnvValue(env[urlKey]);
+  const authToken = readEnvValue(env[tokenKey]);
+
+  if (!url) {
+    throw new Error(`${urlKey} is required when target=${target}.`);
+  }
+
+  if (!authToken) {
+    throw new Error(`${tokenKey} is required when target=${target}.`);
+  }
+
+  return {
+    url,
+    authToken,
+  };
 }
 
 export function resolveDatabaseRuntimeConfig(
@@ -87,16 +150,59 @@ export function resolvePrismaCliDatabaseUrl(env: DatabaseRuntimeEnv) {
   return DEFAULT_LOCAL_DATABASE_URL;
 }
 
-export function resolveLocalDevelopmentEnv(
+export function resolveLocalDevelopmentTarget(
   env: DatabaseRuntimeEnv,
-): DatabaseRuntimeEnv {
+  targetOverride?: string,
+): LocalDevelopmentDatabaseTarget {
+  return (
+    parseLocalDevelopmentTarget(targetOverride, "--target") ??
+    parseLocalDevelopmentTarget(
+      env.COIN_HUB_DEV_DATABASE_TARGET,
+      "COIN_HUB_DEV_DATABASE_TARGET",
+    ) ??
+    "daily"
+  );
+}
+
+export function resolveLocalDevelopmentRuntime(
+  env: DatabaseRuntimeEnv,
+  targetOverride?: string,
+) {
+  const target = resolveLocalDevelopmentTarget(env, targetOverride);
   const localDatabaseUrl = resolvePrismaCliDatabaseUrl(env);
 
+  if (target === "local") {
+    return {
+      target,
+      location: localDatabaseUrl,
+      env: {
+        ...env,
+        DATABASE_URL: localDatabaseUrl,
+        LOCAL_DATABASE_URL: localDatabaseUrl,
+        TURSO_DATABASE_URL: "",
+        TURSO_AUTH_TOKEN: "",
+      },
+    };
+  }
+
+  const remoteSource = resolveTargetTursoSource(env, target);
+
   return {
-    ...env,
-    DATABASE_URL: localDatabaseUrl,
-    LOCAL_DATABASE_URL: localDatabaseUrl,
-    TURSO_DATABASE_URL: "",
-    TURSO_AUTH_TOKEN: "",
+    target,
+    location: remoteSource.url,
+    env: {
+      ...env,
+      DATABASE_URL: localDatabaseUrl,
+      LOCAL_DATABASE_URL: localDatabaseUrl,
+      TURSO_DATABASE_URL: remoteSource.url,
+      TURSO_AUTH_TOKEN: remoteSource.authToken,
+    },
   };
+}
+
+export function resolveLocalDevelopmentEnv(
+  env: DatabaseRuntimeEnv,
+  targetOverride?: string,
+): DatabaseRuntimeEnv {
+  return resolveLocalDevelopmentRuntime(env, targetOverride).env;
 }

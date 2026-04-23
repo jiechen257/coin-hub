@@ -17,7 +17,7 @@ Coin Hub 是一个交易员策略研究台。首页同时承载三块工作：
 - TypeScript
 - Tailwind CSS + shadcn/ui
 - Prisma 7
-- 本地数据库：SQLite
+- 本地开发数据库：日常 Turso + SQLite 兜底
 - 云端数据库：Turso / libsql
 - 部署：Vercel
 
@@ -27,8 +27,10 @@ Coin Hub 是一个交易员策略研究台。首页同时承载三块工作：
 
 - `pnpm install`
 - `pnpm dev`
+- `pnpm dev:prod`
+- `pnpm dev:local`
 
-本地默认使用 `prisma/dev.db`。
+`pnpm dev` 默认连接日常 Turso。`pnpm dev:local` 使用 `prisma/dev.db`。
 
 ### 生产
 
@@ -132,13 +134,17 @@ Coin Hub 是一个交易员策略研究台。首页同时承载三块工作：
 ## 当前已知运行约束
 
 - 本地和生产数据源是隔离的
-- 本地 SQLite 数据不会自动同步到生产 Turso
+- 本地 SQLite 数据不会自动同步到日常或生产 Turso
+- `pnpm dev:prod` 会直接读写生产 Turso
 - 生产如果只部署代码、不补数据库 schema，记录相关 API 可能在运行期报 500
 - `pnpm dev` 如果出现 `stale Turbopack`，需要 `pnpm dev -- --restart`
 
 ## 常用命令
 
 - `pnpm dev`
+- `pnpm dev:daily`
+- `pnpm dev:prod`
+- `pnpm dev:local`
 - `pnpm dev -- --restart`
 - `pnpm test`
 - `pnpm build`
