@@ -12,8 +12,15 @@ import type {
 } from "@/components/research-desk/research-desk-types";
 
 const chartMocks = vi.hoisted(() => {
-  const setDataMock = vi.fn();
-  const setVisibleRangeMock = vi.fn();
+  let seriesTimes = new Set<number>();
+  const setDataMock = vi.fn((data: Array<{ time: number }>) => {
+    seriesTimes = new Set(data.map((item) => Number(item.time)));
+  });
+  const setVisibleRangeMock = vi.fn((range: { from: number; to: number }) => {
+    if (!seriesTimes.has(Number(range.from)) || !seriesTimes.has(Number(range.to))) {
+      throw new Error("Value is null");
+    }
+  });
   const resizeMock = vi.fn();
   const removeChartMock = vi.fn();
   const addSeriesMock = vi.fn(() => ({
@@ -88,6 +95,9 @@ const chartMocks = vi.hoisted(() => {
     ResizeObserverMock,
     resizeObserverInstances,
     emitResize,
+    resetSeriesTimes: () => {
+      seriesTimes = new Set<number>();
+    },
   };
 });
 
@@ -230,6 +240,7 @@ describe("ResearchChart", () => {
     chartMocks.removeChartMock.mockClear();
     chartMocks.timeScaleMock.mockClear();
     chartMocks.resizeObserverInstances.length = 0;
+    chartMocks.resetSeriesTimes();
   });
 
   it("renders local outcome lanes, creates the local candlestick chart, and notifies on selection", async () => {
@@ -428,6 +439,12 @@ describe("ResearchChart", () => {
       />,
     );
 
+    expect(chartMocks.setDataMock).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        { time: toExpectedTimestamp("2026-04-18T23:00:00.000Z") },
+        { time: toExpectedTimestamp("2026-04-19T03:00:00.000Z") },
+      ]),
+    );
     expect(chartMocks.setVisibleRangeMock).toHaveBeenCalledWith({
       from: toExpectedTimestamp("2026-04-18T23:00:00.000Z"),
       to: toExpectedTimestamp("2026-04-19T03:00:00.000Z"),
@@ -450,7 +467,10 @@ describe("ResearchChart", () => {
         name: /交易员甲 · 记录复盘标题.*正向 · 趋势跟随/i,
       }),
     ).toBeInTheDocument();
-    expect(chartMocks.setDataMock).toHaveBeenCalledWith([]);
+    expect(chartMocks.setDataMock).toHaveBeenCalledWith([
+      { time: toExpectedTimestamp("2026-04-19T00:00:00.000Z") },
+      { time: toExpectedTimestamp("2026-04-19T01:00:00.000Z") },
+    ]);
     expect(chartMocks.setVisibleRangeMock).toHaveBeenCalledWith({
       from: toExpectedTimestamp("2026-04-19T00:00:00.000Z"),
       to: toExpectedTimestamp("2026-04-19T01:00:00.000Z"),

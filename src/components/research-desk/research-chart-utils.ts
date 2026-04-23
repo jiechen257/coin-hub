@@ -1,4 +1,9 @@
-import type { CandlestickData, IRange, UTCTimestamp } from "lightweight-charts";
+import type {
+  CandlestickData,
+  IRange,
+  UTCTimestamp,
+  WhitespaceData,
+} from "lightweight-charts";
 import type {
   ResearchDeskCandle,
   ResearchDeskOutcome,
@@ -37,6 +42,10 @@ export type ResearchChartLaneRow = {
   id: string;
   items: ResearchChartLaneItem[];
 };
+
+export type ResearchChartSeriesData = Array<
+  CandlestickData<UTCTimestamp> | WhitespaceData<UTCTimestamp>
+>;
 
 export function toUnixTimestamp(value: string | number): UTCTimestamp {
   const timestampMs = typeof value === "string" ? new Date(value).getTime() : value;
@@ -148,14 +157,31 @@ function buildLaneWindow(
 
 export function toCandlestickSeriesData(
   candles: ResearchDeskCandle[],
-): CandlestickData[] {
-  return candles.map((candle) => ({
+  bounds?: ResearchChartTimeBounds,
+): ResearchChartSeriesData {
+  const data: ResearchChartSeriesData = candles.map((candle) => ({
     time: toUnixTimestamp(candle.openTime),
     open: candle.open,
     high: candle.high,
     low: candle.low,
     close: candle.close,
   }));
+
+  if (!bounds) {
+    return data;
+  }
+
+  const existingTimes = new Set(data.map((item) => Number(item.time)));
+  const boundaryData: ResearchChartSeriesData = [
+    toUnixTimestamp(bounds.startMs),
+    toUnixTimestamp(bounds.endMs),
+  ]
+    .filter((time) => !existingTimes.has(Number(time)))
+    .map((time) => ({ time }));
+
+  return [...data, ...boundaryData].sort(
+    (left, right) => Number(left.time) - Number(right.time),
+  );
 }
 
 export function toTimeScaleRange(

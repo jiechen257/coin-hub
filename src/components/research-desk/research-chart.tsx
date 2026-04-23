@@ -521,7 +521,6 @@ export function ResearchChart({
   const chartHostRef = useRef<HTMLDivElement | null>(null);
   const chartHandleRef = useRef<ResearchChartHandle | null>(null);
   const [activeMorphologyId, setActiveMorphologyId] = useState<string | null>(null);
-  const seriesData = useMemo(() => toCandlestickSeriesData(candles), [candles]);
   const activeMorphology = activeRecord?.morphology ?? null;
   const timeBounds = useMemo(
     () => buildResearchChartTimeBounds(candles, outcomes, activeMorphology),
@@ -529,6 +528,10 @@ export function ResearchChart({
   );
   const visibleRange = useMemo(() => toTimeScaleRange(timeBounds), [timeBounds]);
   const hasTimelineData = candles.length > 0 || outcomes.length > 0;
+  const seriesData = useMemo(
+    () => toCandlestickSeriesData(candles, hasTimelineData ? timeBounds : undefined),
+    [candles, hasTimelineData, timeBounds],
+  );
   const laneRows = useMemo(
     () => buildOutcomeLaneRows(outcomes, timeBounds),
     [outcomes, timeBounds],
