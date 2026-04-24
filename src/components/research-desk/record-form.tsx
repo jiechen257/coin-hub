@@ -4,9 +4,11 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { CirclePlus, Loader2, Trash2, UserPlus } from "lucide-react";
 import type {
   ResearchDeskRecord,
+  ResearchDeskSourceType,
   ResearchDeskSymbol,
   ResearchDeskTrader,
 } from "@/components/research-desk/research-desk-types";
+import { parseJsonRecordRequest } from "@/components/research-desk/record-json-payload";
 import {
   parseRecordMorphology,
   type RecordMorphology,
@@ -66,7 +68,7 @@ export type CreateRecordRequest =
       traderId: string;
       symbol: ResearchDeskSymbol;
       recordType: "trade";
-      sourceType: "manual";
+      sourceType: ResearchDeskSourceType;
       startedAt: string;
       endedAt: string;
       morphology?: RecordMorphology;
@@ -79,7 +81,7 @@ export type CreateRecordRequest =
       traderId: string;
       symbol: ResearchDeskSymbol;
       recordType: "view";
-      sourceType: "manual";
+      sourceType: ResearchDeskSourceType;
       startedAt: string;
       endedAt: string;
       morphology?: RecordMorphology;
@@ -152,6 +154,11 @@ function toLocalDateTimeValue(value?: string) {
   const date = value ? new Date(value) : new Date();
   const timezoneOffset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
+}
+
+function toIsoDateTimeOrUndefined(value: string) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
 }
 
 function createEmptyViewPlan(index: number): ViewPlanFormState {
@@ -237,9 +244,11 @@ export function RecordForm({
   const [selectedTraderId, setSelectedTraderId] = useState<string>("");
   const [symbol, setSymbol] = useState<ResearchDeskSymbol>("BTC");
   const [recordType, setRecordType] = useState<"trade" | "view">("trade");
+  const [entryMode, setEntryMode] = useState<"form" | "json">("form");
   const [startedAt, setStartedAt] = useState(toLocalDateTimeValue());
   const [endedAt, setEndedAt] = useState(toLocalDateTimeValue());
   const [morphologyText, setMorphologyText] = useState("");
+  const [jsonText, setJsonText] = useState("");
   const [rawContent, setRawContent] = useState("");
   const [entryPrice, setEntryPrice] = useState("");
   const [exitPrice, setExitPrice] = useState("");
@@ -258,6 +267,50 @@ export function RecordForm({
   const [error, setError] = useState<string | null>(null);
 
   const traderOptions = useMemo(() => traders, [traders]);
+  const selectedTrader = useMemo(
+    () =>
+      traderOptions.find((trader) => trader.id === selectedTraderId) ??
+      traderOptions[0] ??
+      null,
+    [selectedTraderId, traderOptions],
+  );
+  const jsonExample = useMemo(
+    () =>
+      JSON.stringify(
+        {
+          traderName: selectedTrader?.name ?? "简简",
+          symbol,
+          recordType: "view",
+          sourceType: "manual",
+          occurredAt: toIsoDateTimeOrUndefined(startedAt) ?? new Date().toISOString(),
+          rawContent: "粘贴 LLM 从文案或截图里提取出的原始观点。",
+          morphology: {
+            version: "v1",
+            items: [
+              {
+                kind: "keyLevel",
+                label: "81000 阻力",
+                timeframe: "1h",
+                price: 81000,
+              },
+            ],
+          },
+          plans: [
+            {
+              label: "1h上涨延伸跟随",
+              side: "long",
+              triggerText: "不跌回 5m 中枢",
+              entryText: "关注三买机会",
+              riskText: "跌回 5m 中枢则计划失效",
+              exitText: "上方关注 81000 附近阻力",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    [selectedTrader?.name, startedAt, symbol],
+  );
   const tradePlan = initialRecord?.executionPlans[0] ?? null;
   const hasSettledTradeSample = Boolean(tradePlan?.sample);
 
@@ -280,6 +333,7 @@ export function RecordForm({
       setSelectedTraderId(traderOptions[0]?.id ?? "");
       setSymbol("BTC");
       setRecordType("trade");
+      setEntryMode("form");
       return;
     }
 
@@ -288,6 +342,7 @@ export function RecordForm({
     setSelectedTraderId(initialRecord.traderId);
     setSymbol(initialRecord.symbol);
     setRecordType(initialRecord.recordType);
+    setEntryMode("form");
     setStartedAt(
       toLocalDateTimeValue(initialRecord.startedAt ?? initialRecord.occurredAt),
     );
@@ -387,12 +442,47 @@ export function RecordForm({
     setStartedAt(nextTime);
     setEndedAt(nextTime);
     setMorphologyText("");
+    setJsonText("");
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const traderId = selectedTraderId || traderOptions[0]?.id || "";
+
+    if (!isEditMode && entryMode === "json") {
+      if (!jsonText.trim()) {
+        setError("先粘贴 JSON 参数");
+        return;
+      }
+
+      setIsSavingRecord(true);
+      setError(null);
+      setMessage(null);
+
+      try {
+        await onCreateRecord(
+          parseJsonRecordRequest({
+            text: jsonText,
+            traders: traderOptions,
+            fallbackTraderId: traderId || undefined,
+            fallbackSymbol: symbol,
+            fallbackStartedAt: toIsoDateTimeOrUndefined(startedAt),
+            fallbackEndedAt: toIsoDateTimeOrUndefined(endedAt),
+          }),
+        );
+
+        resetRecordForm();
+        setMessage("记录已保存");
+        onRecordSaved?.();
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : "保存记录失败");
+      } finally {
+        setIsSavingRecord(false);
+      }
+
+      return;
+    }
 
     if (!traderId) {
       setError("请先创建或选择交易员");
@@ -632,113 +722,161 @@ export function RecordForm({
           </Select>
         </FieldBlock>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <FieldBlock label="资产">
-            <Select value={symbol} onValueChange={(value) => setSymbol(value as ResearchDeskSymbol)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="BTC">BTC</SelectItem>
-                <SelectItem value="ETH">ETH</SelectItem>
-              </SelectContent>
-            </Select>
-          </FieldBlock>
-
-          <FieldBlock
-            label="记录开始"
-            htmlFor="started-at"
-            description="研究图默认用开始时间锚定记录。"
+        {!isEditMode ? (
+          <Tabs
+            value={entryMode}
+            onValueChange={(value) => setEntryMode(value as "form" | "json")}
+            className="grid gap-2"
           >
-            <Input
-              id="started-at"
-              type="datetime-local"
-              value={startedAt}
-              onChange={(event) => {
-                const nextStartedAt = event.target.value;
-
-                setStartedAt(nextStartedAt);
-
-                if (new Date(endedAt).getTime() < new Date(nextStartedAt).getTime()) {
-                  setEndedAt(nextStartedAt);
-                }
-              }}
-            />
-          </FieldBlock>
-
-          <FieldBlock
-            label="记录结束"
-            htmlFor="ended-at"
-            description="同一条观点可覆盖完整观察区间。"
-          >
-            <Input
-              id="ended-at"
-              type="datetime-local"
-              value={endedAt}
-              onChange={(event) => setEndedAt(event.target.value)}
-            />
-          </FieldBlock>
-        </div>
-
-        <Tabs
-          value={recordType}
-          onValueChange={(value) => {
-            if (isEditMode) {
-              return;
-            }
-
-            setRecordType(value as "trade" | "view");
-          }}
-          className="gap-5"
-        >
-          <div className="grid gap-2">
-            <Label>记录类型</Label>
-            <TabsList className="grid w-full grid-cols-2" aria-disabled={isEditMode}>
-              <TabsTrigger value="trade" disabled={isEditMode}>
-                真实开单
-              </TabsTrigger>
-              <TabsTrigger value="view" disabled={isEditMode}>
-                行情观点
-              </TabsTrigger>
+            <Label>录入方式</Label>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="form">表单输入</TabsTrigger>
+              <TabsTrigger value="json">JSON 参数</TabsTrigger>
             </TabsList>
-            {isEditMode ? (
-              <p className="text-xs leading-5 text-muted-foreground">
-                编辑时保持原记录类型，避免打断既有样本与 outcome 关系。
-              </p>
-            ) : null}
-          </div>
+          </Tabs>
+        ) : null}
 
+        {!isEditMode && entryMode === "json" ? (
           <FieldBlock
-            label="原始记录"
-            htmlFor="raw-content"
-            description="先抓原始语句，页面的摘要卡和折叠结构会帮你自动做第二层整理。"
+            label="JSON 参数"
+            htmlFor="json-record-payload"
+            description="支持现有 API payload，也支持 traderName 与 occurredAt 简写。"
           >
             <Textarea
-              id="raw-content"
-              aria-label="原始记录"
-              placeholder="输入当时的原始记录或执行说明"
-              value={rawContent}
-              onChange={(event) => setRawContent(event.target.value)}
-              className="min-h-28"
+              id="json-record-payload"
+              aria-label="JSON 参数"
+              placeholder={jsonExample}
+              value={jsonText}
+              onChange={(event) => setJsonText(event.target.value)}
+              className="min-h-[420px] font-mono text-xs leading-6"
             />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setJsonText(jsonExample)}
+              className="justify-self-start"
+            >
+              填入示例
+            </Button>
           </FieldBlock>
+        ) : (
+          <>
+            <div className="grid gap-4 lg:grid-cols-3">
+              <FieldBlock label="资产">
+                <Select
+                  value={symbol}
+                  onValueChange={(value) => setSymbol(value as ResearchDeskSymbol)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BTC">BTC</SelectItem>
+                    <SelectItem value="ETH">ETH</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldBlock>
 
-          <FieldBlock
-            label="形态标注"
-            htmlFor="morphology-text"
-            description="可选：用结构化 JSON 标注趋势、笔、线段、中枢、关键位、目标区和时间窗。"
-          >
-            <Textarea
-              id="morphology-text"
-              aria-label="形态标注"
-              placeholder={`{\n  "version": "v1",\n  "items": [\n    {\n      "kind": "keyLevel",\n      "label": "78333",\n      "timeframe": "4h",\n      "price": 78333\n    }\n  ]\n}`}
-              value={morphologyText}
-              onChange={(event) => setMorphologyText(event.target.value)}
-              className="min-h-32 font-mono text-xs leading-6"
-            />
-          </FieldBlock>
+              <FieldBlock
+                label="记录开始"
+                htmlFor="started-at"
+                description="研究图默认用开始时间锚定记录。"
+              >
+                <Input
+                  id="started-at"
+                  type="datetime-local"
+                  value={startedAt}
+                  onChange={(event) => {
+                    const nextStartedAt = event.target.value;
 
-          <TabsContent value="trade" className="grid gap-5">
+                    setStartedAt(nextStartedAt);
+
+                    if (
+                      new Date(endedAt).getTime() <
+                      new Date(nextStartedAt).getTime()
+                    ) {
+                      setEndedAt(nextStartedAt);
+                    }
+                  }}
+                />
+              </FieldBlock>
+
+              <FieldBlock
+                label="记录结束"
+                htmlFor="ended-at"
+                description="同一条观点可覆盖完整观察区间。"
+              >
+                <Input
+                  id="ended-at"
+                  type="datetime-local"
+                  value={endedAt}
+                  onChange={(event) => setEndedAt(event.target.value)}
+                />
+              </FieldBlock>
+            </div>
+
+            <Tabs
+              value={recordType}
+              onValueChange={(value) => {
+                if (isEditMode) {
+                  return;
+                }
+
+                setRecordType(value as "trade" | "view");
+              }}
+              className="gap-5"
+            >
+              <div className="grid gap-2">
+                <Label>记录类型</Label>
+                <TabsList
+                  className="grid w-full grid-cols-2"
+                  aria-disabled={isEditMode}
+                >
+                  <TabsTrigger value="trade" disabled={isEditMode}>
+                    真实开单
+                  </TabsTrigger>
+                  <TabsTrigger value="view" disabled={isEditMode}>
+                    行情观点
+                  </TabsTrigger>
+                </TabsList>
+                {isEditMode ? (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    编辑时保持原记录类型，避免打断既有样本与 outcome 关系。
+                  </p>
+                ) : null}
+              </div>
+
+              <FieldBlock
+                label="原始记录"
+                htmlFor="raw-content"
+                description="先抓原始语句，页面的摘要卡和折叠结构会帮你自动做第二层整理。"
+              >
+                <Textarea
+                  id="raw-content"
+                  aria-label="原始记录"
+                  placeholder="输入当时的原始记录或执行说明"
+                  value={rawContent}
+                  onChange={(event) => setRawContent(event.target.value)}
+                  className="min-h-28"
+                />
+              </FieldBlock>
+
+              <FieldBlock
+                label="形态标注"
+                htmlFor="morphology-text"
+                description="可选：用结构化 JSON 标注趋势、笔、线段、中枢、关键位、目标区和时间窗。"
+              >
+                <Textarea
+                  id="morphology-text"
+                  aria-label="形态标注"
+                  placeholder={`{\n  "version": "v1",\n  "items": [\n    {\n      "kind": "keyLevel",\n      "label": "78333",\n      "timeframe": "4h",\n      "price": 78333\n    }\n  ]\n}`}
+                  value={morphologyText}
+                  onChange={(event) => setMorphologyText(event.target.value)}
+                  className="min-h-32 font-mono text-xs leading-6"
+                />
+              </FieldBlock>
+
+              <TabsContent value="trade" className="grid gap-5">
             <FieldBlock label="方向">
               <RadioGroup
                 value={tradeSide}
@@ -1004,7 +1142,9 @@ export function RecordForm({
               新增方案
             </Button>
           </TabsContent>
-        </Tabs>
+            </Tabs>
+          </>
+        )}
 
         <div
           className={cn(
@@ -1032,7 +1172,9 @@ export function RecordForm({
               )}
               {isSavingRecord
                 ? "保存中..."
-                : isEditMode
+                : !isEditMode && entryMode === "json"
+                  ? "解析并保存记录"
+                  : isEditMode
                   ? "保存修改"
                   : "保存记录"}
             </Button>
