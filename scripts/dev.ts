@@ -127,10 +127,15 @@ async function main() {
 
   const nextBin = resolve(process.cwd(), "node_modules/next/dist/bin/next");
   const nextArgs = [nextBin, "dev", ...forwardedArgs];
+  const childEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    ...runtime.env,
+  };
+
   printDatabaseBanner(runtime.target, runtime.location);
   const child = spawn(process.execPath, nextArgs, {
     cwd: process.cwd(),
-    env: runtime.env as NodeJS.ProcessEnv,
+    env: childEnv,
     stdio: "inherit",
   });
 
