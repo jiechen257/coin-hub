@@ -16,6 +16,23 @@ const traders: ResearchDeskTrader[] = [
 ];
 
 describe("RecordForm", () => {
+  it("shows a disabled trader selector when no trader exists", () => {
+    render(
+      <RecordForm
+        traders={[]}
+        onCreateTrader={vi.fn()}
+        onCreateRecord={vi.fn()}
+        variant="dialog"
+      />,
+    );
+
+    const emptyTraderSelector = screen
+      .getByText("暂无交易员，请先新增")
+      .closest("button");
+
+    expect(emptyTraderSelector).toBeDisabled();
+  });
+
   it("creates a record from pasted JSON parameters", async () => {
     const user = userEvent.setup();
     const onCreateRecord = vi.fn().mockResolvedValue(undefined);

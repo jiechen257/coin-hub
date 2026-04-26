@@ -99,6 +99,7 @@ export function ResearchDeskSidebar({
   onArchiveRecord,
 }: ResearchDeskSidebarProps) {
   const counts = countByStatus(records);
+  const hasRecords = records.length > 0;
   const selectedStatus = selectedRecord?.status ?? "not_started";
   const selectedCompletion = selectedRecord?.completion ?? {
     missingBasics: [],
@@ -140,23 +141,26 @@ export function ResearchDeskSidebar({
         <div className="grid gap-2">
           <p className="text-sm font-medium text-foreground">顶部记录选择</p>
           <Select
-            value={selectedRecordId ?? ""}
+            disabled={!hasRecords}
+            value={hasRecords ? selectedRecordId ?? "" : ""}
             onValueChange={(value) => {
               if (value) {
                 onSelectRecord(value);
               }
             }}
           >
-            <SelectTrigger className="min-h-11">
-              <SelectValue placeholder="选择记录" />
+            <SelectTrigger className="min-h-11" disabled={!hasRecords}>
+              <SelectValue placeholder={hasRecords ? "选择记录" : "暂无可选记录"} />
             </SelectTrigger>
-            <SelectContent>
-              {records.map((record) => (
-                <SelectItem key={record.id} value={record.id}>
-                  {buildRecordOptionLabel(record)}
-                </SelectItem>
-              ))}
-            </SelectContent>
+            {hasRecords ? (
+              <SelectContent>
+                {records.map((record) => (
+                  <SelectItem key={record.id} value={record.id}>
+                    {buildRecordOptionLabel(record)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            ) : null}
           </Select>
         </div>
 

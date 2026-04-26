@@ -76,7 +76,7 @@ test("records a new research item from the first screen and saves a review tag",
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: "记录 K 线图工作台" }),
+    page.getByRole("heading", { name: "本地结果轨道" }),
   ).toBeVisible();
   await expect(page.getByLabel("本地研究图")).toBeVisible();
   await expect(page.locator('[data-slot="research-chart-canvas"]')).toBeVisible();
@@ -105,7 +105,9 @@ test("records a new research item from the first screen and saves a review tag",
   ).toBeVisible();
   await expect(page.locator(".research-lane-row")).toHaveCount(1);
   await expect(
-    page.getByText(RESEARCH_RECORD_RAW_CONTENT, { exact: true }),
+    page.getByRole("region", { name: "outcome 轨道" })
+      .getByRole("button")
+      .filter({ hasText: RESEARCH_RECORD_RAW_CONTENT }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: REVIEW_TAG_LABEL }).nth(1).click();

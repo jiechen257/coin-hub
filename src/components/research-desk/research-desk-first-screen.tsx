@@ -1,6 +1,5 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PriceChart } from "@/components/analysis/price-chart";
 import { OutcomeDetail } from "@/components/research-desk/outcome-detail";
@@ -18,7 +17,6 @@ import type {
   ResearchDeskReviewTagOption,
   ResearchDeskSelection,
 } from "@/components/research-desk/research-desk-types";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -51,30 +49,6 @@ type ResearchDeskFirstScreenProps = {
 
 type DetailPanelTab = "summary" | "outcome" | "record";
 
-function buildHeroStats(
-  selection: ResearchDeskSelection,
-  filteredSummary: ResearchDeskOutcomeAggregates,
-  filteredCount: number,
-) {
-  return [
-    {
-      label: "当前切片",
-      value: `${selection.symbol} · ${selection.timeframe}`,
-      meta: "研究图与参考图同步切换",
-    },
-    {
-      label: "过滤结果",
-      value: `${filteredCount}`,
-      meta: `good ${filteredSummary.counts.good} · bad ${filteredSummary.counts.bad}`,
-    },
-    {
-      label: "待跟进",
-      value: `${filteredSummary.counts.pending}`,
-      meta: "优先继续标注或结算样本",
-    },
-  ];
-}
-
 export function ResearchDeskFirstScreen({
   selection,
   resultFilter,
@@ -95,11 +69,6 @@ export function ResearchDeskFirstScreen({
   onSaveReviewTags,
   onSettlePlan,
 }: ResearchDeskFirstScreenProps) {
-  const heroStats = buildHeroStats(
-    selection,
-    filteredSummary,
-    filteredOutcomes.length,
-  );
   const [mobilePanel, setMobilePanel] = useState<DetailPanelTab>(
     selectedOutcome ? "outcome" : selectedRecord ? "record" : "summary",
   );
@@ -118,48 +87,6 @@ export function ResearchDeskFirstScreen({
   return (
     <div className="grid items-start gap-4 2xl:gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,420px)]">
       <div className="grid gap-3.5 xl:gap-4">
-        <Card className="overflow-hidden border-primary/15 bg-[radial-gradient(circle_at_82%_18%,rgba(14,165,233,0.16),transparent_18rem),radial-gradient(circle_at_92%_82%,rgba(245,158,11,0.1),transparent_14rem),linear-gradient(135deg,rgba(255,255,255,0.95),rgba(239,246,255,0.84)_48%,rgba(255,247,237,0.9))]">
-          <CardContent className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(240px,0.7fr)]">
-            <div className="space-y-3">
-              <Badge
-                variant="outline"
-                className="w-fit border-primary/20 bg-primary/8 uppercase tracking-[0.28em] text-primary"
-              >
-                Coin Hub
-              </Badge>
-              <div className="space-y-1.5">
-                <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                  记录 K 线图工作台
-                </h1>
-                <p className="support-copy max-w-3xl">
-                  首屏先完成结果复盘，再进入记录录入和策略沉淀。移动端强调单列阅读与分组切换，桌面端保留研究图和详情并排的高密度工作流。
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
-                <span>优先看本地研究图，次级参考位继续承接原生行情核对。</span>
-              </div>
-            </div>
-
-            <div className="grid gap-2.5 sm:grid-cols-3 lg:grid-cols-1">
-              {heroStats.map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-[1.25rem] border border-white/70 bg-white/72 p-3.5 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.45)] backdrop-blur"
-                >
-                  <p className="data-kicker">{stat.label}</p>
-                  <p className="mt-2 text-[1.65rem] font-semibold tracking-tight text-foreground">
-                    {stat.value}
-                  </p>
-                  <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
-                    {stat.meta}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
         <ResearchChartToolbar
           selection={selection}
           onSelectionChange={onSelectionChange}

@@ -267,6 +267,7 @@ export function RecordForm({
   const [error, setError] = useState<string | null>(null);
 
   const traderOptions = useMemo(() => traders, [traders]);
+  const hasTraderOptions = traderOptions.length > 0;
   const selectedTrader = useMemo(
     () =>
       traderOptions.find((trader) => trader.id === selectedTraderId) ??
@@ -708,17 +709,25 @@ export function RecordForm({
 
       <form className="grid gap-5" onSubmit={handleSubmit}>
         <FieldBlock label="选择交易员">
-          <Select value={selectedTraderId} onValueChange={setSelectedTraderId}>
-            <SelectTrigger>
-              <SelectValue placeholder="请选择交易员" />
+          <Select
+            disabled={!hasTraderOptions}
+            value={hasTraderOptions ? selectedTraderId : ""}
+            onValueChange={setSelectedTraderId}
+          >
+            <SelectTrigger disabled={!hasTraderOptions}>
+              <SelectValue
+                placeholder={hasTraderOptions ? "请选择交易员" : "暂无交易员，请先新增"}
+              />
             </SelectTrigger>
-            <SelectContent>
-              {traderOptions.map((trader) => (
-                <SelectItem key={trader.id} value={trader.id}>
-                  {trader.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
+            {hasTraderOptions ? (
+              <SelectContent>
+                {traderOptions.map((trader) => (
+                  <SelectItem key={trader.id} value={trader.id}>
+                    {trader.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            ) : null}
           </Select>
         </FieldBlock>
 

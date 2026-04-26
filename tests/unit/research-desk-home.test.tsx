@@ -113,7 +113,10 @@ it("renders the rebuilt research desk first screen", async () => {
   render(await HomePage());
 
   expect(
-    screen.getByRole("heading", { name: "记录 K 线图工作台" }),
+    screen.queryByRole("heading", { name: "记录 K 线图工作台" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: "本地结果轨道" }),
   ).toBeInTheDocument();
   expect(
     screen.getByRole("heading", { name: "TradingView 参考视图" }),

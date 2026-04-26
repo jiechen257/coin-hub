@@ -425,7 +425,10 @@ it("renders the outcome-first first screen around the research chart", () => {
   render(<ResearchDesk initialData={createInitialData()} />);
 
   expect(
-    screen.getByRole("heading", { name: "记录 K 线图工作台" }),
+    screen.queryByRole("heading", { name: "记录 K 线图工作台" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: "本地结果轨道" }),
   ).toBeInTheDocument();
   expect(
     screen.getByRole("heading", { name: "TradingView 参考视图" }),
@@ -434,6 +437,21 @@ it("renders the outcome-first first screen around the research chart", () => {
   expect(screen.getByRole("tab", { name: "候选策略" })).toBeInTheDocument();
   expect(screen.getByText("数据源：")).toBeInTheDocument();
   expect(screen.getByText("本地 SQLite")).toBeInTheDocument();
+});
+
+it("shows a disabled top record selector when no record exists", () => {
+  render(
+    <ResearchDesk
+      initialData={{
+        ...createInitialData(),
+        records: [],
+        selectedRecordId: null,
+      }}
+    />,
+  );
+
+  expect(screen.getByText("暂无可选记录")).toBeInTheDocument();
+  expect(screen.getByRole("combobox")).toBeDisabled();
 });
 
 it("shows recent ended records on the first screen when no records are running", () => {
