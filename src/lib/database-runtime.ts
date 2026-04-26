@@ -10,8 +10,11 @@ export type LocalDevelopmentDatabaseTarget =
 
 type DatabaseRuntimeEnv = {
   [key: string]: string | undefined;
+  NODE_ENV?: "production" | "development" | "test";
   DATABASE_URL?: string;
   LOCAL_DATABASE_URL?: string;
+  VERCEL_ENV?: string;
+  COIN_HUB_REMOTE_DATABASE_ALLOWED?: string;
   COIN_HUB_DEV_DATABASE_TARGET?: string;
   TURSO_DAILY_DATABASE_URL?: string;
   TURSO_DAILY_AUTH_TOKEN?: string;
@@ -31,6 +34,12 @@ export type DatabaseRuntimeConfig =
       url: string;
       authToken: string;
     };
+
+export type PublicDatabaseRuntimeInfo = {
+  target: "local" | "daily" | "production" | "remote";
+  label: string;
+  tone: "neutral" | "warning" | "danger";
+};
 
 function readEnvValue(value: string | undefined) {
   const trimmed = value?.trim();
@@ -93,8 +102,11 @@ export function resolveDatabaseRuntimeConfig(
   const databaseUrl = readEnvValue(env.DATABASE_URL);
   const tursoDatabaseUrl = readEnvValue(env.TURSO_DATABASE_URL);
   const tursoAuthToken = readEnvValue(env.TURSO_AUTH_TOKEN);
+  const remoteDatabaseAllowed =
+    env.NODE_ENV !== "development" ||
+    env.COIN_HUB_REMOTE_DATABASE_ALLOWED === "1";
 
-  if (tursoDatabaseUrl) {
+  if (tursoDatabaseUrl && remoteDatabaseAllowed) {
     if (!tursoAuthToken) {
       throw new Error("TURSO_AUTH_TOKEN is required when using Turso.");
     }
@@ -106,7 +118,10 @@ export function resolveDatabaseRuntimeConfig(
     };
   }
 
-  const resolvedDatabaseUrl = databaseUrl ?? DEFAULT_LOCAL_DATABASE_URL;
+  const resolvedDatabaseUrl =
+    databaseUrl?.startsWith("libsql://") && !remoteDatabaseAllowed
+      ? DEFAULT_LOCAL_DATABASE_URL
+      : databaseUrl ?? DEFAULT_LOCAL_DATABASE_URL;
 
   if (resolvedDatabaseUrl.startsWith("file:")) {
     return {
@@ -160,7 +175,7 @@ export function resolveLocalDevelopmentTarget(
       env.COIN_HUB_DEV_DATABASE_TARGET,
       "COIN_HUB_DEV_DATABASE_TARGET",
     ) ??
-    "daily"
+    "local"
   );
 }
 
@@ -196,6 +211,7 @@ export function resolveLocalDevelopmentRuntime(
       LOCAL_DATABASE_URL: localDatabaseUrl,
       TURSO_DATABASE_URL: remoteSource.url,
       TURSO_AUTH_TOKEN: remoteSource.authToken,
+      COIN_HUB_REMOTE_DATABASE_ALLOWED: "1",
     },
   };
 }
@@ -205,4 +221,52 @@ export function resolveLocalDevelopmentEnv(
   targetOverride?: string,
 ): DatabaseRuntimeEnv {
   return resolveLocalDevelopmentRuntime(env, targetOverride).env;
+}
+
+export function resolvePublicDatabaseRuntimeInfo(
+  env: DatabaseRuntimeEnv,
+): PublicDatabaseRuntimeInfo {
+  const runtime = resolveDatabaseRuntimeConfig(env);
+
+  if (runtime.kind === "sqlite") {
+    return {
+      target: "local",
+      label: "本地 SQLite",
+      tone: "neutral",
+    };
+  }
+
+  const url = runtime.url;
+  const dailyUrl = readEnvValue(env.TURSO_DAILY_DATABASE_URL);
+  const productionUrl = readEnvValue(env.TURSO_PRODUCTION_DATABASE_URL);
+
+  if (productionUrl && url === productionUrl) {
+    return {
+      target: "production",
+      label: "生产 Turso",
+      tone: "danger",
+    };
+  }
+
+  if (dailyUrl && url === dailyUrl) {
+    return {
+      target: "daily",
+      label: "日常 Turso",
+      tone: "warning",
+    };
+  }
+
+  if (env.VERCEL_ENV === "production") {
+    return {
+      target: "production",
+      label: "生产 Turso",
+      tone: "danger",
+    };
+  }
+
+  return {
+    target: "remote",
+    label: "远端 Turso",
+    tone: "warning",
+  };
 }

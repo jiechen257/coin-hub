@@ -8,6 +8,7 @@ import type {
   ResearchDeskRecord,
   ResearchDeskRecordStatus,
   ResearchDeskTrader,
+  ResearchDeskPayload,
 } from "@/components/research-desk/research-desk-types";
 import type { CreateRecordRequest } from "@/components/research-desk/record-form";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,7 @@ type ResearchDeskSidebarProps = {
   selectedRecord: ResearchDeskRecord | null;
   selectedRecordId: string | null;
   summary: ResearchDeskOutcomeAggregates;
+  databaseRuntime: ResearchDeskPayload["databaseRuntime"];
   selectorMode: "active" | "archive";
   onCreateTrader: (input: {
     name: string;
@@ -76,12 +78,19 @@ function getNextStatusForAction(action: ReturnType<typeof getRecordStatusAction>
   }
 }
 
+function getDatabaseRuntimeBadgeVariant(
+  tone: ResearchDeskPayload["databaseRuntime"]["tone"],
+) {
+  return tone === "danger" ? "destructive" : tone === "warning" ? "outline" : "default";
+}
+
 export function ResearchDeskSidebar({
   traders,
   records,
   selectedRecord,
   selectedRecordId,
   summary,
+  databaseRuntime,
   selectorMode,
   onCreateTrader,
   onCreateRecord,
@@ -112,6 +121,12 @@ export function ResearchDeskSidebar({
           </div>
           <Badge variant="outline">
             {selectorMode === "archive" ? "归档集合" : "工作集合"}
+          </Badge>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-secondary/20 px-3 py-2 text-sm">
+          <span className="text-muted-foreground">数据源：</span>
+          <Badge variant={getDatabaseRuntimeBadgeVariant(databaseRuntime.tone)}>
+            {databaseRuntime.label}
           </Badge>
         </div>
         <RecordComposerDialog

@@ -18,12 +18,37 @@ function getFeaturedRecords(records: ResearchDeskRecord[]) {
   const running = records.filter((record) => record.status === "in_progress");
 
   if (running.length > 0) {
-    return running;
+    return {
+      title: "正在运行的记录",
+      description: "首页首屏优先展示进行中记录。没有进行中记录时，展示可继续推进的记录。",
+      emptyText: "暂无运行中记录，先新建或开始一条记录。",
+      records: running,
+    };
   }
 
-  return records
+  const notStarted = records
     .filter((record) => (record.status ?? "not_started") === "not_started")
     .slice(0, 6);
+
+  if (notStarted.length > 0) {
+    return {
+      title: "待启动记录",
+      description: "当前没有进行中记录，首屏展示尚未开始记录，便于直接启动或补齐。",
+      emptyText: "暂无待启动记录，先新建一条记录。",
+      records: notStarted,
+    };
+  }
+
+  const ended = records
+    .filter((record) => record.status === "ended")
+    .slice(0, 6);
+
+  return {
+    title: "最近已结束记录",
+    description: "当前没有进行中记录，首屏展示最近已结束记录，便于确认存量记录仍在并继续补齐。",
+    emptyText: "暂无可展示记录，先新建一条记录。",
+    records: ended,
+  };
 }
 
 export function ActiveRecordsPanel({
@@ -32,26 +57,26 @@ export function ActiveRecordsPanel({
   onSelectRecord,
   children,
 }: ActiveRecordsPanelProps) {
-  const featuredRecords = getFeaturedRecords(records);
+  const featured = getFeaturedRecords(records);
 
   return (
     <div className="grid gap-4">
       <Card>
         <CardHeader className="space-y-2">
           <p className="data-kicker">运行中</p>
-          <CardTitle>正在运行的记录</CardTitle>
+          <CardTitle>{featured.title}</CardTitle>
           <p className="support-copy text-sm">
-            首页首屏优先展示进行中记录。没有进行中记录时，展示尚未开始记录作为下一步入口。
+            {featured.description}
           </p>
         </CardHeader>
         <CardContent>
-          {featuredRecords.length === 0 ? (
+          {featured.records.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border/80 px-4 py-8 text-sm text-muted-foreground">
-              暂无运行中记录，先新建或开始一条记录。
+              {featured.emptyText}
             </div>
           ) : (
             <div className="grid gap-2.5 md:grid-cols-2 2xl:grid-cols-3">
-              {featuredRecords.map((record) => {
+              {featured.records.map((record) => {
                 const active = record.id === selectedRecordId;
                 const status = record.status ?? "not_started";
 

@@ -95,6 +95,11 @@ function isSameSelection(
 }
 
 export function ResearchDesk({ initialData }: ResearchDeskProps) {
+  const databaseRuntime = initialData.databaseRuntime ?? {
+    target: "local" as const,
+    label: "本地 SQLite",
+    tone: "neutral" as const,
+  };
   const [traders, setTraders] = useState(initialData.traders);
   const [records, setRecords] = useState(initialData.records);
   const [selectedRecordId, setSelectedRecordId] = useState(
@@ -608,6 +613,7 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
               ? archivePayload?.summary ?? filteredSummary
               : filteredSummary
           }
+          databaseRuntime={databaseRuntime}
           selectorMode={workspaceTab === "archive" ? "archive" : "active"}
           onCreateTrader={handleCreateTrader}
           onCreateRecord={handleCreateRecord}

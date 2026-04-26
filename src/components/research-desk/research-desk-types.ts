@@ -185,6 +185,11 @@ export type ResearchDeskPayload = ResearchDeskChartSlicePayload & {
   traders: ResearchDeskTrader[];
   records: ResearchDeskRecord[];
   selectedRecordId: string | null;
+  databaseRuntime: {
+    target: "local" | "daily" | "production" | "remote";
+    label: string;
+    tone: "neutral" | "warning" | "danger";
+  };
   candidates: ResearchDeskCandidate[];
 };
 

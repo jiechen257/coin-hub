@@ -6,6 +6,7 @@ import {
   resolveDatabaseRuntimeConfig,
   resolveLocalDevelopmentEnv,
   resolveLocalDevelopmentTarget,
+  resolvePublicDatabaseRuntimeInfo,
   resolvePrismaCliDatabaseUrl,
 } from "@/lib/database-runtime";
 
@@ -13,6 +14,36 @@ describe("resolveDatabaseRuntimeConfig", () => {
   it("prefers Turso runtime config when Turso env is present", () => {
     expect(
       resolveDatabaseRuntimeConfig({
+        DATABASE_URL: "file:./prisma/dev.db",
+        TURSO_DATABASE_URL: "libsql://coin-hub.turso.io",
+        TURSO_AUTH_TOKEN: "token-123",
+      }),
+    ).toEqual({
+      kind: "turso",
+      url: "libsql://coin-hub.turso.io",
+      authToken: "token-123",
+    });
+  });
+
+  it("keeps direct next dev on local sqlite even when canonical Turso env exists", () => {
+    expect(
+      resolveDatabaseRuntimeConfig({
+        NODE_ENV: "development",
+        DATABASE_URL: "file:./prisma/dev.db",
+        TURSO_DATABASE_URL: "libsql://coin-hub.turso.io",
+        TURSO_AUTH_TOKEN: "token-123",
+      }),
+    ).toEqual({
+      kind: "sqlite",
+      url: "file:./prisma/dev.db",
+    });
+  });
+
+  it("allows development Turso only when the dev script marks it explicit", () => {
+    expect(
+      resolveDatabaseRuntimeConfig({
+        NODE_ENV: "development",
+        COIN_HUB_REMOTE_DATABASE_ALLOWED: "1",
         DATABASE_URL: "file:./prisma/dev.db",
         TURSO_DATABASE_URL: "libsql://coin-hub.turso.io",
         TURSO_AUTH_TOKEN: "token-123",
@@ -107,8 +138,8 @@ describe("resolvePrismaCliDatabaseUrl", () => {
 });
 
 describe("resolveLocalDevelopmentTarget", () => {
-  it("defaults to daily when no target override exists", () => {
-    expect(resolveLocalDevelopmentTarget({})).toBe("daily");
+  it("defaults to local when no target override exists", () => {
+    expect(resolveLocalDevelopmentTarget({})).toBe("local");
   });
 
   it("uses COIN_HUB_DEV_DATABASE_TARGET when present", () => {
@@ -155,7 +186,7 @@ describe("resolveLocalDevelopmentEnv", () => {
         TURSO_PRODUCTION_DATABASE_URL: "libsql://coin-hub.turso.io",
         TURSO_PRODUCTION_AUTH_TOKEN: "prod-token",
         NEXT_RUNTIME: "nodejs",
-      }),
+      }, "daily"),
     ).toMatchObject({
       DATABASE_URL: "file:./prisma/local-dev.db",
       LOCAL_DATABASE_URL: "file:./prisma/local-dev.db",
@@ -225,9 +256,12 @@ describe("resolveLocalDevelopmentEnv", () => {
 
   it("throws when the selected daily turso source is incomplete", () => {
     expect(() =>
-      resolveLocalDevelopmentEnv({
-        TURSO_DAILY_DATABASE_URL: "libsql://coin-hub-daily.turso.io",
-      }),
+      resolveLocalDevelopmentEnv(
+        {
+          TURSO_DAILY_DATABASE_URL: "libsql://coin-hub-daily.turso.io",
+        },
+        "daily",
+      ),
     ).toThrow("TURSO_DAILY_AUTH_TOKEN is required when target=daily.");
   });
 
@@ -240,5 +274,33 @@ describe("resolveLocalDevelopmentEnv", () => {
         "production",
       ),
     ).toThrow("TURSO_PRODUCTION_DATABASE_URL is required when target=production.");
+  });
+});
+
+describe("resolvePublicDatabaseRuntimeInfo", () => {
+  it("describes local sqlite without exposing a path", () => {
+    expect(
+      resolvePublicDatabaseRuntimeInfo({
+        DATABASE_URL: "file:./prisma/dev.db",
+      }),
+    ).toEqual({
+      target: "local",
+      label: "本地 SQLite",
+      tone: "neutral",
+    });
+  });
+
+  it("marks Vercel production Turso as production without exposing secrets", () => {
+    expect(
+      resolvePublicDatabaseRuntimeInfo({
+        VERCEL_ENV: "production",
+        TURSO_DATABASE_URL: "libsql://coin-hub.turso.io",
+        TURSO_AUTH_TOKEN: "prod-token",
+      }),
+    ).toEqual({
+      target: "production",
+      label: "生产 Turso",
+      tone: "danger",
+    });
   });
 });

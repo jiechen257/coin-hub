@@ -15,6 +15,7 @@ import {
 } from "@/modules/records/record-serializer";
 import { selectPreferredRecordId } from "@/modules/records/record-status";
 import { ensureResearchDeskSchema } from "@/lib/research-desk-schema-bootstrap";
+import { resolvePublicDatabaseRuntimeInfo } from "@/lib/database-runtime";
 
 function prepareResearchDeskLoaderEnv() {
   if (process.env.VITEST) {
@@ -41,6 +42,7 @@ function buildEmptyResearchDeskPayload(
     traders: [],
     records: [],
     selectedRecordId: null,
+    databaseRuntime: resolvePublicDatabaseRuntimeInfo(process.env),
     candidates: [],
   };
 }
@@ -145,6 +147,7 @@ export async function loadResearchDeskPayload(input: {
       traders: traders.map(serializeTrader),
       records: serializedRecords,
       selectedRecordId: selectPreferredRecordId(serializedRecords),
+      databaseRuntime: resolvePublicDatabaseRuntimeInfo(process.env),
       candidates,
     };
   } catch (error) {

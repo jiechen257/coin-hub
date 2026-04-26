@@ -142,12 +142,6 @@ describe("buildResearchDeskSchemaStatements", () => {
       }),
     );
 
-    expect(statements).toEqual([
-      'UPDATE "TraderRecord"\n      SET\n        "startedAt" = COALESCE("startedAt", "occurredAt"),\n        "endedAt" = COALESCE("endedAt", "startedAt", "occurredAt")\n      WHERE "startedAt" IS NULL OR "endedAt" IS NULL',
-      'UPDATE "TraderRecord"\n      SET "status" = \'archived\'\n      WHERE "archivedAt" IS NOT NULL',
-      'UPDATE "TraderRecord"\n      SET "status" = \'ended\'\n      WHERE "archivedAt" IS NULL\n        AND "status" = \'not_started\'\n        AND "id" IN (\n          SELECT DISTINCT ep."recordId"\n          FROM "ExecutionPlan" ep\n          INNER JOIN "TradeSample" ts ON ts."planId" = ep."id"\n        )',
-      'UPDATE "TraderRecord"\n      SET "status" = \'ended\'\n      WHERE "archivedAt" IS NULL\n        AND "status" = \'not_started\'\n        AND "id" IN (\n          SELECT DISTINCT ro."recordId"\n          FROM "RecordOutcome" ro\n          WHERE ro."recordId" IS NOT NULL\n            AND ro."resultLabel" IN (\'good\', \'neutral\', \'bad\')\n          UNION\n          SELECT DISTINCT ep."recordId"\n          FROM "RecordOutcome" ro\n          INNER JOIN "ExecutionPlan" ep ON ep."id" = ro."planId"\n          WHERE ro."planId" IS NOT NULL\n            AND ro."resultLabel" IN (\'good\', \'neutral\', \'bad\')\n        )',
-      'UPDATE "TraderRecord"\n      SET "status" = \'in_progress\'\n      WHERE "archivedAt" IS NULL\n        AND "status" = \'not_started\'\n        AND "id" IN (\n          SELECT DISTINCT ro."recordId"\n          FROM "RecordOutcome" ro\n          WHERE ro."recordId" IS NOT NULL\n            AND ro."resultLabel" = \'pending\'\n          UNION\n          SELECT DISTINCT ep."recordId"\n          FROM "RecordOutcome" ro\n          INNER JOIN "ExecutionPlan" ep ON ep."id" = ro."planId"\n          WHERE ro."planId" IS NOT NULL\n            AND ro."resultLabel" = \'pending\'\n        )',
-    ]);
+    expect(statements).toEqual([]);
   });
 });

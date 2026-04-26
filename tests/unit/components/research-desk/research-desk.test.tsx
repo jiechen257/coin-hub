@@ -320,6 +320,11 @@ function createInitialData(): ResearchDeskPayload {
       }),
     ],
     selectedRecordId: "record-1",
+    databaseRuntime: {
+      target: "local",
+      label: "本地 SQLite",
+      tone: "neutral",
+    },
     candidates: [
       {
         id: "candidate-1",
@@ -427,6 +432,24 @@ it("renders the outcome-first first screen around the research chart", () => {
   ).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "新建记录" })).toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "候选策略" })).toBeInTheDocument();
+  expect(screen.getByText("数据源：")).toBeInTheDocument();
+  expect(screen.getByText("本地 SQLite")).toBeInTheDocument();
+});
+
+it("shows recent ended records on the first screen when no records are running", () => {
+  const initialData = {
+    ...createInitialData(),
+    records: createInitialData().records.map((record) => ({
+      ...record,
+      status: "ended" as const,
+    })),
+  };
+
+  render(<ResearchDesk initialData={initialData} />);
+
+  expect(screen.getByRole("heading", { name: "最近已结束记录" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /第一条记录/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /第二条记录/i })).toBeInTheDocument();
 });
 
 it("keeps the clicked record selected when that record has no outcome", async () => {

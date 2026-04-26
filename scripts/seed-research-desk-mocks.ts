@@ -1,7 +1,8 @@
 import "dotenv/config";
 
 import type { PrismaClient } from "@prisma/client";
-import { resolveLocalDevelopmentEnv } from "@/lib/database-runtime";
+import { parseDevCliArgs } from "@/lib/dev-command-args";
+import { resolveMockSeedRuntime } from "@/lib/mock-seed-runtime";
 import type { NormalizedCandle } from "@/modules/market-data/normalize-candles";
 
 const MOCK_SEED_ID = "research-desk-mocks-v1";
@@ -150,7 +151,9 @@ async function rebuildStrategyCandidates(db: PrismaClient) {
 }
 
 async function main() {
-  Object.assign(process.env, resolveLocalDevelopmentEnv(process.env));
+  const { targetOverride } = parseDevCliArgs(process.argv.slice(2));
+  const runtime = resolveMockSeedRuntime(process.env, targetOverride);
+  Object.assign(process.env, runtime.env);
 
   const [{ db }, { candleRepository }, { createTraderRecord }, { syncOutcomesForRecordId }, { outcomeRepository }, { settleExecutionPlan }] =
     await Promise.all([
