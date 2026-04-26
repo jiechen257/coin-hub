@@ -5,6 +5,10 @@ import type {
   ResearchDeskTrader,
 } from "@/components/research-desk/research-desk-types";
 import { parseStoredRecordMorphology } from "@/modules/records/record-morphology";
+import {
+  buildRecordCompletion,
+  normalizeRecordStatus,
+} from "@/modules/records/record-status";
 
 function normalizeSourceType(input: string): ResearchDeskSourceType {
   switch (input) {
@@ -100,10 +104,13 @@ export function serializeRecord(input: {
   symbol: string;
   timeframe: string | null;
   recordType: string;
+  status?: string | null;
   sourceType: string;
   occurredAt: Date;
   startedAt: Date | null;
   endedAt: Date | null;
+  archivedAt?: Date | null;
+  archiveSummary?: string | null;
   morphology: string | null;
   rawContent: string;
   notes: string | null;
@@ -117,21 +124,30 @@ export function serializeRecord(input: {
 }): ResearchDeskRecord {
   const startedAt = input.startedAt ?? input.occurredAt;
   const endedAt = input.endedAt ?? startedAt;
-
-  return {
+  const status = normalizeRecordStatus(input.status, input.archivedAt);
+  const executionPlans = input.executionPlans.map(serializePlan);
+  const record = {
     id: input.id,
     traderId: input.traderId,
     symbol: input.symbol as ResearchDeskRecord["symbol"],
     timeframe: input.timeframe,
     recordType: input.recordType as ResearchDeskRecord["recordType"],
+    status,
     sourceType: normalizeSourceType(input.sourceType),
     occurredAt: startedAt.toISOString(),
     startedAt: startedAt.toISOString(),
     endedAt: endedAt.toISOString(),
+    archivedAt: input.archivedAt?.toISOString() ?? null,
+    archiveSummary: input.archiveSummary ?? null,
     morphology: parseStoredRecordMorphology(input.morphology),
     rawContent: input.rawContent,
     notes: input.notes,
     trader: serializeTrader(input.trader),
-    executionPlans: input.executionPlans.map(serializePlan),
+    executionPlans,
+  };
+
+  return {
+    ...record,
+    completion: buildRecordCompletion(record),
   };
 }

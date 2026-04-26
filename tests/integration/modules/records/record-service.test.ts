@@ -532,7 +532,7 @@ describe("record-service", () => {
     });
   });
 
-  it("archives records through /api/trader-records/[recordId] and hides them from listing", async () => {
+  it("archives ended records through /api/trader-records/[recordId] and hides them from default listing", async () => {
     const trader = await db.traderProfile.create({ data: { name: "Trader Archive" } });
     const created = await createRecordFromInput({
       traderId: trader.id,
@@ -551,6 +551,20 @@ describe("record-service", () => {
       ],
     });
 
+    const startResponse = await patchTraderRecordRoute(
+      createPatchRequest(`http://localhost/api/trader-records/${created.id}`, {
+        action: "set-status",
+        status: "in_progress",
+      }),
+      { params: Promise.resolve({ recordId: created.id }) },
+    );
+    const endResponse = await patchTraderRecordRoute(
+      createPatchRequest(`http://localhost/api/trader-records/${created.id}`, {
+        action: "set-status",
+        status: "ended",
+      }),
+      { params: Promise.resolve({ recordId: created.id }) },
+    );
     const archiveResponse = await patchTraderRecordRoute(
       createPatchRequest(`http://localhost/api/trader-records/${created.id}`, {
         action: "archive",
@@ -558,6 +572,8 @@ describe("record-service", () => {
       { params: Promise.resolve({ recordId: created.id }) },
     );
 
+    expect(startResponse.status).toBe(200);
+    expect(endResponse.status).toBe(200);
     expect(archiveResponse.status).toBe(200);
 
     const listResponse = await getTraderRecordsRoute();

@@ -116,7 +116,7 @@ function compareReviewTagLabels(left: string, right: string) {
   return left.localeCompare(right, "zh-Hans-CN");
 }
 
-function serializeOutcome(input: SliceOutcome): ResearchDeskOutcome {
+export function serializeOutcome(input: SliceOutcome): ResearchDeskOutcome {
   return {
     id: input.id,
     subjectType: input.subjectType,
@@ -139,7 +139,7 @@ function serializeOutcome(input: SliceOutcome): ResearchDeskOutcome {
   };
 }
 
-function buildReviewTagOptions(
+export function buildReviewTagOptions(
   outcomes: ResearchDeskOutcome[],
 ): ResearchDeskReviewTagOption[] {
   const labels = new Set<string>(DEFAULT_REVIEW_TAGS);
@@ -158,7 +158,7 @@ function buildReviewTagOptions(
     }));
 }
 
-function buildOutcomeSummary(
+export function buildOutcomeSummary(
   outcomes: ResearchDeskOutcome[],
 ): ResearchDeskOutcomeAggregates {
   const counts: ResearchDeskOutcomeAggregates["counts"] = {

@@ -1,6 +1,5 @@
 "use client";
 
-import { Archive } from "lucide-react";
 import { RecordEditorDialog } from "@/components/research-desk/record-editor-dialog";
 import { formatRecordTimeRange } from "@/components/research-desk/record-time-range";
 import type {
@@ -11,8 +10,8 @@ import type {
   CreateRecordRequest,
   UpdateRecordRequest,
 } from "@/components/research-desk/record-form";
+import { RECORD_STATUS_LABELS } from "@/modules/records/record-status";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +27,6 @@ type RecordListProps = {
   }) => Promise<ResearchDeskTrader>;
   onCreateRecord: (input: CreateRecordRequest) => Promise<void>;
   onUpdateRecord: (recordId: string, input: UpdateRecordRequest) => Promise<void>;
-  onArchiveRecord: (recordId: string) => Promise<void>;
 };
 
 function getRecordPreview(record: ResearchDeskRecord) {
@@ -47,7 +45,6 @@ export function RecordList({
   onCreateTrader,
   onCreateRecord,
   onUpdateRecord,
-  onArchiveRecord,
 }: RecordListProps) {
   return (
     <Card className="overflow-hidden">
@@ -64,6 +61,7 @@ export function RecordList({
 
         {records.map((record) => {
           const active = record.id === selectedRecordId;
+          const status = record.status ?? "not_started";
 
           return (
             <div
@@ -92,6 +90,9 @@ export function RecordList({
                       {record.timeframe ? (
                         <Badge variant="outline">{record.timeframe}</Badge>
                       ) : null}
+                      <Badge variant="outline">
+                        {RECORD_STATUS_LABELS[status]}
+                      </Badge>
                     </div>
                   </div>
 
@@ -113,24 +114,6 @@ export function RecordList({
                     onCreateRecord={onCreateRecord}
                     onUpdateRecord={onUpdateRecord}
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={async (event) => {
-                      event.stopPropagation();
-
-                      if (!window.confirm("存档后这条记录将不再出现在工作台里，继续吗？")) {
-                        return;
-                      }
-
-                      await onArchiveRecord(record.id);
-                    }}
-                  >
-                    <Archive className="h-4 w-4" />
-                    存档
-                  </Button>
                 </div>
               </div>
             </div>

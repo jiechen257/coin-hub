@@ -1,7 +1,11 @@
 import {
   archiveTraderRecord,
   createTraderRecord,
+  listTraderRecords,
+  setTraderRecordStatus,
+  updateTraderRecordArchiveSummary,
   updateTraderRecord,
+  type ListTraderRecordsInput,
 } from "@/modules/records/record-repository";
 import {
   createRecordSchema,
@@ -78,4 +82,22 @@ export async function updateRecordFromInput(recordId: string, input: unknown) {
 
 export async function archiveRecordById(recordId: string) {
   return archiveTraderRecord(recordId);
+}
+
+export async function listRecordsFromInput(input: ListTraderRecordsInput = {}) {
+  return listTraderRecords(input);
+}
+
+export async function setRecordStatusById(
+  recordId: string,
+  status: "not_started" | "in_progress" | "ended",
+) {
+  return setTraderRecordStatus(recordId, status);
+}
+
+export async function updateRecordArchiveSummaryById(
+  recordId: string,
+  archiveSummary: string | null,
+) {
+  return updateTraderRecordArchiveSummary(recordId, archiveSummary);
 }

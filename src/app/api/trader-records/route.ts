@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
 import { serializeRecord } from "@/modules/records/record-serializer";
-import { createRecordFromInput } from "@/modules/records/record-service";
+import {
+  createRecordFromInput,
+  listRecordsFromInput,
+} from "@/modules/records/record-service";
 import { ZodError } from "zod";
+import { db } from "@/lib/db";
 import { ensureResearchDeskSchema } from "@/lib/research-desk-schema-bootstrap";
 
 function buildBadRequestResponse(error: ZodError | SyntaxError) {
@@ -21,14 +24,29 @@ function buildBadRequestResponse(error: ZodError | SyntaxError) {
   );
 }
 
-export async function GET() {
+const SUPPORTED_RECORD_STATUSES = new Set([
+  "not_started",
+  "in_progress",
+  "ended",
+  "archived",
+  "all",
+]);
+const SUPPORTED_SYMBOLS = new Set(["BTC", "ETH"]);
+
+export async function GET(
+  request: Request = new Request("http://localhost/api/trader-records"),
+) {
   await ensureResearchDeskSchema();
-  const records = await db.traderRecord.findMany({
-    where: {
-      archivedAt: null,
-    },
-    include: { trader: true, executionPlans: { include: { sample: true } } },
-    orderBy: { startedAt: "desc" },
+  const url = new URL(request.url);
+  const status = url.searchParams.get("status");
+  const symbol = url.searchParams.get("symbol");
+  const traderId = url.searchParams.get("traderId");
+  const records = await listRecordsFromInput({
+    status: SUPPORTED_RECORD_STATUSES.has(status ?? "")
+      ? (status as "not_started" | "in_progress" | "ended" | "archived" | "all")
+      : undefined,
+    symbol: SUPPORTED_SYMBOLS.has(symbol ?? "") ? (symbol as "BTC" | "ETH") : undefined,
+    traderId: traderId || undefined,
   });
 
   return NextResponse.json({ records: records.map(serializeRecord) });

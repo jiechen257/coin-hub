@@ -62,6 +62,8 @@ export function buildResearchDeskSchemaStatements(snapshot: SchemaSnapshot) {
         "morphology" TEXT,
         "rawContent" TEXT NOT NULL,
         "notes" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'not_started',
+        "archiveSummary" TEXT,
         "archivedAt" DATETIME,
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" DATETIME NOT NULL,
@@ -85,6 +87,16 @@ export function buildResearchDeskSchemaStatements(snapshot: SchemaSnapshot) {
 
     if (!hasColumn(snapshot, "TraderRecord", "archivedAt")) {
       statements.push(`ALTER TABLE "TraderRecord" ADD COLUMN "archivedAt" DATETIME`);
+    }
+
+    if (!hasColumn(snapshot, "TraderRecord", "status")) {
+      statements.push(
+        `ALTER TABLE "TraderRecord" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'not_started'`,
+      );
+    }
+
+    if (!hasColumn(snapshot, "TraderRecord", "archiveSummary")) {
+      statements.push(`ALTER TABLE "TraderRecord" ADD COLUMN "archiveSummary" TEXT`);
     }
   }
 
@@ -230,6 +242,62 @@ export function buildResearchDeskSchemaStatements(snapshot: SchemaSnapshot) {
         "startedAt" = COALESCE("startedAt", "occurredAt"),
         "endedAt" = COALESCE("endedAt", "startedAt", "occurredAt")
       WHERE "startedAt" IS NULL OR "endedAt" IS NULL
+    `);
+
+    statements.push(`
+      UPDATE "TraderRecord"
+      SET "status" = 'archived'
+      WHERE "archivedAt" IS NOT NULL
+    `);
+
+    statements.push(`
+      UPDATE "TraderRecord"
+      SET "status" = 'ended'
+      WHERE "archivedAt" IS NULL
+        AND "status" = 'not_started'
+        AND "id" IN (
+          SELECT DISTINCT ep."recordId"
+          FROM "ExecutionPlan" ep
+          INNER JOIN "TradeSample" ts ON ts."planId" = ep."id"
+        )
+    `);
+
+    statements.push(`
+      UPDATE "TraderRecord"
+      SET "status" = 'ended'
+      WHERE "archivedAt" IS NULL
+        AND "status" = 'not_started'
+        AND "id" IN (
+          SELECT DISTINCT ro."recordId"
+          FROM "RecordOutcome" ro
+          WHERE ro."recordId" IS NOT NULL
+            AND ro."resultLabel" IN ('good', 'neutral', 'bad')
+          UNION
+          SELECT DISTINCT ep."recordId"
+          FROM "RecordOutcome" ro
+          INNER JOIN "ExecutionPlan" ep ON ep."id" = ro."planId"
+          WHERE ro."planId" IS NOT NULL
+            AND ro."resultLabel" IN ('good', 'neutral', 'bad')
+        )
+    `);
+
+    statements.push(`
+      UPDATE "TraderRecord"
+      SET "status" = 'in_progress'
+      WHERE "archivedAt" IS NULL
+        AND "status" = 'not_started'
+        AND "id" IN (
+          SELECT DISTINCT ro."recordId"
+          FROM "RecordOutcome" ro
+          WHERE ro."recordId" IS NOT NULL
+            AND ro."resultLabel" = 'pending'
+          UNION
+          SELECT DISTINCT ep."recordId"
+          FROM "RecordOutcome" ro
+          INNER JOIN "ExecutionPlan" ep ON ep."id" = ro."planId"
+          WHERE ro."planId" IS NOT NULL
+            AND ro."resultLabel" = 'pending'
+        )
     `);
   }
 

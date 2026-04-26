@@ -4,9 +4,12 @@ import { serializeRecord } from "@/modules/records/record-serializer";
 import {
   TraderRecordMutationError,
   TraderRecordNotFoundError,
+  TraderRecordStatusTransitionError,
 } from "@/modules/records/record-repository";
 import {
   archiveRecordById,
+  setRecordStatusById,
+  updateRecordArchiveSummaryById,
   updateRecordFromInput,
 } from "@/modules/records/record-service";
 import { ensureResearchDeskSchema } from "@/lib/research-desk-schema-bootstrap";
@@ -14,6 +17,18 @@ import { ensureResearchDeskSchema } from "@/lib/research-desk-schema-bootstrap";
 const archiveRecordSchema = z
   .object({
     action: z.literal("archive"),
+  })
+  .strict();
+const setRecordStatusSchema = z
+  .object({
+    action: z.literal("set-status"),
+    status: z.enum(["not_started", "in_progress", "ended"]),
+  })
+  .strict();
+const updateArchiveSummarySchema = z
+  .object({
+    action: z.literal("update-archive-summary"),
+    archiveSummary: z.string().optional().nullable(),
   })
   .strict();
 
@@ -52,6 +67,18 @@ function buildMutationErrorResponse(error: TraderRecordMutationError) {
   );
 }
 
+function buildStatusTransitionErrorResponse(error: TraderRecordStatusTransitionError) {
+  return NextResponse.json(
+    {
+      error: error.message,
+      recordId: error.recordId,
+      currentStatus: error.currentStatus,
+      nextStatus: error.nextStatus,
+    },
+    { status: 409 },
+  );
+}
+
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ recordId: string }> },
@@ -70,7 +97,34 @@ export async function PATCH(
       archiveRecordSchema.parse(payload);
       const record = await archiveRecordById(recordId);
 
-      return NextResponse.json({ record });
+      return NextResponse.json({ record: serializeRecord(record) });
+    }
+
+    if (
+      typeof payload === "object" &&
+      payload !== null &&
+      "action" in payload &&
+      (payload as { action?: unknown }).action === "set-status"
+    ) {
+      const input = setRecordStatusSchema.parse(payload);
+      const record = await setRecordStatusById(recordId, input.status);
+
+      return NextResponse.json({ record: serializeRecord(record) });
+    }
+
+    if (
+      typeof payload === "object" &&
+      payload !== null &&
+      "action" in payload &&
+      (payload as { action?: unknown }).action === "update-archive-summary"
+    ) {
+      const input = updateArchiveSummarySchema.parse(payload);
+      const record = await updateRecordArchiveSummaryById(
+        recordId,
+        input.archiveSummary?.trim() || null,
+      );
+
+      return NextResponse.json({ record: serializeRecord(record) });
     }
 
     const record = await updateRecordFromInput(recordId, payload);
@@ -86,6 +140,10 @@ export async function PATCH(
 
     if (error instanceof TraderRecordMutationError) {
       return buildMutationErrorResponse(error);
+    }
+
+    if (error instanceof TraderRecordStatusTransitionError) {
+      return buildStatusTransitionErrorResponse(error);
     }
 
     throw error;

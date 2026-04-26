@@ -114,7 +114,6 @@ export function ResearchDeskSecondaryWorkspace({
           onCreateTrader={onCreateTrader}
           onCreateRecord={onCreateRecord}
           onUpdateRecord={onUpdateRecord}
-          onArchiveRecord={onArchiveRecord}
         />
       </div>
 

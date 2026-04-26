@@ -13,6 +13,7 @@ import {
   serializeRecord,
   serializeTrader,
 } from "@/modules/records/record-serializer";
+import { selectPreferredRecordId } from "@/modules/records/record-status";
 import { ensureResearchDeskSchema } from "@/lib/research-desk-schema-bootstrap";
 
 function prepareResearchDeskLoaderEnv() {
@@ -119,6 +120,9 @@ export async function loadResearchDeskPayload(input: {
       db.traderRecord.findMany({
         where: {
           archivedAt: null,
+          NOT: {
+            status: "archived",
+          },
         },
         include: {
           trader: true,
@@ -140,7 +144,7 @@ export async function loadResearchDeskPayload(input: {
       ...chartSlice,
       traders: traders.map(serializeTrader),
       records: serializedRecords,
-      selectedRecordId: serializedRecords[0]?.id ?? null,
+      selectedRecordId: selectPreferredRecordId(serializedRecords),
       candidates,
     };
   } catch (error) {

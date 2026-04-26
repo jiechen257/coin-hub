@@ -36,6 +36,12 @@ export type ListSliceOutcomesInput = {
   timeframe: string;
 };
 
+export type ListArchiveOutcomesInput = {
+  recordIds: string[];
+  symbol: string;
+  timeframe: string;
+};
+
 export class OutcomeNotFoundError extends Error {
   readonly outcomeId: string;
 
@@ -238,6 +244,7 @@ export async function listSliceOutcomes(input: ListSliceOutcomesInput) {
     include: {
       record: {
         select: {
+          status: true,
           archivedAt: true,
         },
       },
@@ -245,6 +252,7 @@ export async function listSliceOutcomes(input: ListSliceOutcomesInput) {
         select: {
           record: {
             select: {
+              status: true,
               archivedAt: true,
             },
           },
@@ -261,11 +269,18 @@ export async function listSliceOutcomes(input: ListSliceOutcomesInput) {
 
   return outcomes
     .filter((outcome) => {
-      if (outcome.record?.archivedAt) {
+      if (
+        outcome.record &&
+        (outcome.record.archivedAt || outcome.record.status === "archived")
+      ) {
         return false;
       }
 
-      if (outcome.plan?.record.archivedAt) {
+      if (
+        outcome.plan &&
+        (outcome.plan.record.archivedAt ||
+          outcome.plan.record.status === "archived")
+      ) {
         return false;
       }
 
@@ -274,8 +289,46 @@ export async function listSliceOutcomes(input: ListSliceOutcomesInput) {
     .map(mapRecordOutcome);
 }
 
+export async function listArchiveOutcomes(input: ListArchiveOutcomesInput) {
+  if (input.recordIds.length === 0) {
+    return [];
+  }
+
+  const outcomes = await db.recordOutcome.findMany({
+    where: {
+      symbol: input.symbol,
+      timeframe: input.timeframe,
+      OR: [
+        {
+          recordId: {
+            in: input.recordIds,
+          },
+        },
+        {
+          plan: {
+            recordId: {
+              in: input.recordIds,
+            },
+          },
+        },
+      ],
+    },
+    include: {
+      reviewTags: {
+        include: {
+          tag: true,
+        },
+      },
+    },
+    orderBy: [{ windowStartAt: "desc" }, { computedAt: "desc" }],
+  });
+
+  return outcomes.map(mapRecordOutcome);
+}
+
 export const outcomeRepository = {
   upsertRecordOutcome,
   replaceReviewTags,
   listSliceOutcomes,
+  listArchiveOutcomes,
 };

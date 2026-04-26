@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, vi } from "vitest";
 import { ResearchDesk } from "@/components/research-desk/research-desk";
 import type {
+  ResearchDeskArchivePayload,
   ResearchDeskOutcome,
   ResearchDeskPayload,
   ResearchDeskRecord,
@@ -179,8 +180,17 @@ function createRecord(overrides: Partial<ResearchDeskRecord>): ResearchDeskRecor
     symbol: "BTC",
     timeframe: "1h",
     recordType: "view",
+    status: "not_started",
     sourceType: "manual",
     occurredAt: "2026-04-19T00:00:00.000Z",
+    archivedAt: null,
+    archiveSummary: null,
+    completion: {
+      missingBasics: [],
+      missingPlans: [],
+      missingReview: [],
+      score: 100,
+    },
     rawContent: "默认记录",
     notes: null,
     trader: {
@@ -274,11 +284,13 @@ function createInitialData(): ResearchDeskPayload {
       createRecord({
         id: "record-1",
         recordType: "trade",
+        status: "in_progress",
         rawContent: "第一条记录",
         occurredAt: "2026-04-19T00:00:00.000Z",
       }),
       createRecord({
         id: "record-2",
+        status: "ended",
         rawContent: "第二条记录",
         occurredAt: "2026-04-19T01:00:00.000Z",
         executionPlans: [
@@ -321,6 +333,39 @@ function createInitialData(): ResearchDeskPayload {
         sampleRefs: [],
       },
     ],
+  };
+}
+
+function createArchivePayload(record: ResearchDeskRecord): ResearchDeskArchivePayload {
+  return {
+    selection: {
+      symbol: "BTC",
+      timeframe: "1h",
+    },
+    records: [record],
+    selectedRecordId: record.id,
+    reviewTagOptions: [],
+    summary: {
+      counts: {
+        good: 0,
+        neutral: 0,
+        bad: 0,
+        pending: 0,
+        total: 0,
+      },
+      reviewTags: [],
+    },
+    archiveStats: {
+      recordCount: 1,
+      summarizedCount: record.archiveSummary ? 1 : 0,
+      unsummarizedCount: record.archiveSummary ? 0 : 1,
+      goodRate: null,
+      topReviewTags: [],
+    },
+    chart: {
+      candles: [],
+      outcomes: [],
+    },
   };
 }
 
@@ -381,7 +426,7 @@ it("renders the outcome-first first screen around the research chart", () => {
     screen.getByRole("heading", { name: "TradingView 参考视图" }),
   ).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "新建记录" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "候选策略" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "候选策略" })).toBeInTheDocument();
 });
 
 it("keeps the clicked record selected when that record has no outcome", async () => {
@@ -389,11 +434,14 @@ it("keeps the clicked record selected when that record has no outcome", async ()
 
   render(<ResearchDesk initialData={createInitialData()} />);
 
+  await user.click(screen.getByRole("tab", { name: "全部记录" }));
+
   await user.click(
     screen.getByRole("button", {
       name: /没有 outcome 的记录/i,
     }),
   );
+  await user.click(screen.getByRole("tab", { name: "运行中" }));
 
   expectPanelsToContain("record-detail", "record:record-3:没有 outcome 的记录");
   expectPanelsToContain("outcome-detail", "outcome:none");
@@ -583,6 +631,8 @@ it("refreshes record detail and candidates after editing a record", async () => 
 
   render(<ResearchDesk initialData={initialData} />);
 
+  await user.click(screen.getByRole("tab", { name: "全部记录" }));
+
   await user.click(
     screen.getByRole("button", {
       name: /第二条记录/i,
@@ -592,15 +642,19 @@ it("refreshes record detail and candidates after editing a record", async () => 
   await user.click(screen.getByRole("button", { name: "编辑 record-2" }));
 
   await waitFor(() => {
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/trader-records/record-2",
+      expect.objectContaining({
+        method: "PATCH",
+      }),
+    );
+  });
+  await user.click(screen.getByRole("tab", { name: "运行中" }));
+
+  await waitFor(() => {
     expectPanelsToContain("record-detail", "record:record-2:第二条记录-已更新");
   });
 
-  expect(fetchMock).toHaveBeenCalledWith(
-    "/api/trader-records/record-2",
-    expect.objectContaining({
-      method: "PATCH",
-    }),
-  );
   expect(fetchMock).toHaveBeenCalledWith(
     "/api/strategy-candidates",
     expect.objectContaining({ cache: "no-store" }),
@@ -611,11 +665,16 @@ it("archives a record and removes it from the visible list", async () => {
   const user = userEvent.setup();
   const initialData = createInitialData();
   const remainingRecords = [initialData.records[0], initialData.records[2]];
+  const archivedRecord = {
+    ...initialData.records[1],
+    status: "archived" as const,
+    archivedAt: "2026-04-26T12:00:00.000Z",
+  };
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
 
     if (url === "/api/trader-records/record-2" && init?.method === "PATCH") {
-      return buildJsonResponse({ record: { id: "record-2" } });
+      return buildJsonResponse({ record: archivedRecord });
     }
 
     if (url === "/api/trader-records") {
@@ -630,15 +689,26 @@ it("archives a record and removes it from the visible list", async () => {
       return buildJsonResponse({ candidates: initialData.candidates });
     }
 
+    if (
+      url === "/api/research-desk/archive?symbol=BTC&timeframe=1h&recordId=record-2"
+    ) {
+      return buildJsonResponse(createArchivePayload(archivedRecord));
+    }
+
     throw new Error(`Unexpected fetch ${url}`);
   });
 
   vi.stubGlobal("fetch", fetchMock);
-  vi.stubGlobal("confirm", vi.fn(() => true));
 
   render(<ResearchDesk initialData={initialData} />);
 
-  await user.click(screen.getAllByRole("button", { name: /存档/i })[1]!);
+  await user.click(screen.getByRole("tab", { name: "全部记录" }));
+  await user.click(
+    screen.getByRole("button", {
+      name: /第二条记录/i,
+    }),
+  );
+  await user.click(screen.getByRole("button", { name: "归档" }));
 
   await waitFor(() => {
     expect(

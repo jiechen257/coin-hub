@@ -3,6 +3,11 @@ import {
   serializeRecordMorphology,
   type RecordMorphology,
 } from "@/modules/records/record-morphology";
+import {
+  assertRecordStatusTransition,
+  normalizeRecordStatus,
+  type RecordStatus,
+} from "@/modules/records/record-status";
 
 export type ExecutionPlanInput = {
   id?: string;
@@ -34,6 +39,13 @@ export type CreateRecordInput = {
   plans: ExecutionPlanInput[];
 };
 
+export type ListTraderRecordsInput = {
+  status?: RecordStatus | "all";
+  symbol?: "BTC" | "ETH";
+  traderId?: string;
+  take?: number;
+};
+
 export class TraderRecordNotFoundError extends Error {
   readonly recordId: string;
 
@@ -51,10 +63,83 @@ export class TraderRecordMutationError extends Error {
   }
 }
 
+export class TraderRecordStatusTransitionError extends Error {
+  readonly recordId: string;
+  readonly currentStatus: RecordStatus;
+  readonly nextStatus: RecordStatus;
+
+  constructor(recordId: string, currentStatus: RecordStatus, nextStatus: RecordStatus) {
+    super(`记录状态不能从 ${currentStatus} 直接切换到 ${nextStatus}`);
+    this.name = "TraderRecordStatusTransitionError";
+    this.recordId = recordId;
+    this.currentStatus = currentStatus;
+    this.nextStatus = nextStatus;
+  }
+}
+
 function derivePlanStatus(plan: ExecutionPlanInput) {
   return plan.entryPrice !== undefined && plan.exitPrice !== undefined
     ? "ready"
     : "draft";
+}
+
+function buildRecordStatusWhere(status: ListTraderRecordsInput["status"]) {
+  if (!status) {
+    return {
+      archivedAt: null,
+      NOT: {
+        status: "archived",
+      },
+    };
+  }
+
+  if (status === "all") {
+    return {};
+  }
+
+  if (status === "archived") {
+    return {
+      OR: [{ status: "archived" }, { archivedAt: { not: null } }],
+    };
+  }
+
+  return {
+    status,
+    archivedAt: null,
+  };
+}
+
+async function findRecordStatus(recordId: string) {
+  const record = await db.traderRecord.findUnique({
+    where: { id: recordId },
+    select: {
+      id: true,
+      status: true,
+      archivedAt: true,
+    },
+  });
+
+  if (!record) {
+    throw new TraderRecordNotFoundError(recordId);
+  }
+
+  return {
+    ...record,
+    status: normalizeRecordStatus(record.status, record.archivedAt),
+  };
+}
+
+export async function listTraderRecords(input: ListTraderRecordsInput = {}) {
+  return db.traderRecord.findMany({
+    where: {
+      ...buildRecordStatusWhere(input.status),
+      ...(input.symbol ? { symbol: input.symbol } : {}),
+      ...(input.traderId ? { traderId: input.traderId } : {}),
+    },
+    include: { trader: true, executionPlans: { include: { sample: true } } },
+    orderBy: [{ startedAt: "desc" }, { occurredAt: "desc" }],
+    ...(input.take ? { take: input.take } : {}),
+  });
 }
 
 export async function createTraderRecord(input: CreateRecordInput) {
@@ -211,22 +296,105 @@ export async function updateTraderRecord(recordId: string, input: CreateRecordIn
 }
 
 export async function archiveTraderRecord(recordId: string) {
-  const record = await db.traderRecord.findUnique({
-    where: { id: recordId },
-    select: {
-      id: true,
-      archivedAt: true,
-    },
-  });
+  const record = await findRecordStatus(recordId);
 
-  if (!record || record.archivedAt) {
-    throw new TraderRecordNotFoundError(recordId);
+  if (record.status === "archived") {
+    return db.traderRecord.findUniqueOrThrow({
+      where: { id: recordId },
+      include: {
+        trader: true,
+        executionPlans: {
+          include: {
+            sample: true,
+          },
+        },
+      },
+    });
+  }
+
+  if (record.status !== "ended") {
+    throw new TraderRecordStatusTransitionError(
+      recordId,
+      record.status,
+      "archived",
+    );
   }
 
   return db.traderRecord.update({
     where: { id: recordId },
     data: {
+      status: "archived",
       archivedAt: new Date(),
+    },
+    include: {
+      trader: true,
+      executionPlans: {
+        include: {
+          sample: true,
+        },
+      },
+    },
+  });
+}
+
+export async function setTraderRecordStatus(
+  recordId: string,
+  nextStatus: Exclude<RecordStatus, "archived">,
+) {
+  const record = await findRecordStatus(recordId);
+
+  if (record.status === "archived") {
+    throw new TraderRecordStatusTransitionError(recordId, record.status, nextStatus);
+  }
+
+  try {
+    assertRecordStatusTransition(record.status, nextStatus);
+  } catch {
+    throw new TraderRecordStatusTransitionError(recordId, record.status, nextStatus);
+  }
+
+  return db.traderRecord.update({
+    where: { id: recordId },
+    data: {
+      status: nextStatus,
+    },
+    include: {
+      trader: true,
+      executionPlans: {
+        include: {
+          sample: true,
+        },
+      },
+    },
+  });
+}
+
+export async function updateTraderRecordArchiveSummary(
+  recordId: string,
+  archiveSummary: string | null,
+) {
+  const record = await findRecordStatus(recordId);
+
+  if (record.status !== "archived") {
+    throw new TraderRecordStatusTransitionError(
+      recordId,
+      record.status,
+      "archived",
+    );
+  }
+
+  return db.traderRecord.update({
+    where: { id: recordId },
+    data: {
+      archiveSummary,
+    },
+    include: {
+      trader: true,
+      executionPlans: {
+        include: {
+          sample: true,
+        },
+      },
     },
   });
 }

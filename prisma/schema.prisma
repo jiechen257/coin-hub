@@ -46,6 +46,8 @@ model TraderRecord {
   morphology     String?
   rawContent     String
   notes          String?
+  status         String          @default("not_started")
+  archiveSummary String?
   archivedAt     DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt

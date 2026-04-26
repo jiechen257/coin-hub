@@ -164,6 +164,7 @@ function buildPendingMetrics(): OutcomeMetrics {
 function resolveWindowEndAt(args: {
   candles: OutcomeCandle[];
   timeframeMs: number;
+  fallbackWindowCandles: number;
   windowStartAt: Date;
   settledAt: Date | null;
 }) {
@@ -177,7 +178,9 @@ function resolveWindowEndAt(args: {
     return new Date(lastCandle.openTime.getTime() + args.timeframeMs);
   }
 
-  return new Date(args.windowStartAt.getTime() + args.timeframeMs);
+  return new Date(
+    args.windowStartAt.getTime() + args.timeframeMs * args.fallbackWindowCandles,
+  );
 }
 
 function toDirectionalPercent(side: OutcomePlanSide, referencePrice: number, price: number) {
@@ -436,6 +439,7 @@ function computeSingleOutcome(args: {
   const windowEndAt = resolveWindowEndAt({
     candles: sortedCandles,
     timeframeMs,
+    fallbackWindowCandles: profile.windowCandles,
     windowStartAt,
     settledAt: args.settledAt,
   });

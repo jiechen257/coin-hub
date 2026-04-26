@@ -60,8 +60,17 @@ vi.mock("@/components/research-desk/research-desk-data", () => ({
         symbol: "BTC",
         timeframe: "1h",
         recordType: "trade",
+        status: "not_started",
         sourceType: "manual",
         occurredAt: "2026-04-19T00:00:00.000Z",
+        archivedAt: null,
+        archiveSummary: null,
+        completion: {
+          missingBasics: [],
+          missingPlans: ["执行方案"],
+          missingReview: [],
+          score: 92,
+        },
         rawContent: "BTC 记录",
         notes: null,
         trader: {
@@ -109,7 +118,7 @@ it("renders the rebuilt research desk first screen", async () => {
   expect(
     screen.getByRole("heading", { name: "TradingView 参考视图" }),
   ).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "候选策略" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "候选策略" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "新建记录" })).toBeInTheDocument();
   expect(screen.getByText("ResearchChart Mock")).toBeInTheDocument();
 });

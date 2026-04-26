@@ -7,6 +7,11 @@ export type ResearchDeskOutcomeSubjectType = "record" | "plan";
 export type ResearchDeskReviewTagKind = "preset" | "custom";
 export type ResearchDeskResultFilter = "all" | "good" | "neutral" | "bad";
 export type ResearchDeskReviewTagFilter = string | null;
+export type ResearchDeskRecordStatus =
+  | "not_started"
+  | "in_progress"
+  | "ended"
+  | "archived";
 export type ResearchDeskSourceType =
   | "manual"
   | "twitter"
@@ -94,16 +99,27 @@ export type ResearchDeskPlan = {
   sample: ResearchDeskSample | null;
 };
 
+export type ResearchDeskRecordCompletion = {
+  missingBasics: string[];
+  missingPlans: string[];
+  missingReview: string[];
+  score: number;
+};
+
 export type ResearchDeskRecord = {
   id: string;
   traderId: string;
   symbol: ResearchDeskSymbol;
   timeframe: string | null;
   recordType: "trade" | "view";
+  status: ResearchDeskRecordStatus;
   sourceType: ResearchDeskSourceType;
   occurredAt: string;
   startedAt?: string;
   endedAt?: string;
+  archivedAt: string | null;
+  archiveSummary: string | null;
+  completion: ResearchDeskRecordCompletion;
   morphology?: RecordMorphology | null;
   rawContent: string;
   notes: string | null;
@@ -170,6 +186,30 @@ export type ResearchDeskPayload = ResearchDeskChartSlicePayload & {
   records: ResearchDeskRecord[];
   selectedRecordId: string | null;
   candidates: ResearchDeskCandidate[];
+};
+
+export type ResearchDeskArchiveStats = {
+  recordCount: number;
+  summarizedCount: number;
+  unsummarizedCount: number;
+  goodRate: number | null;
+  topReviewTags: Array<{
+    label: string;
+    count: number;
+  }>;
+};
+
+export type ResearchDeskArchivePayload = {
+  selection: ResearchDeskSelection;
+  records: ResearchDeskRecord[];
+  selectedRecordId: string | null;
+  reviewTagOptions: ResearchDeskReviewTagOption[];
+  summary: ResearchDeskOutcomeAggregates;
+  archiveStats: ResearchDeskArchiveStats;
+  chart: {
+    candles: ResearchDeskCandle[];
+    outcomes: ResearchDeskOutcome[];
+  };
 };
 
 export function buildRecordMarkers(

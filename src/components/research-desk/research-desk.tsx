@@ -1,7 +1,16 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ActiveRecordsPanel } from "@/components/research-desk/active-records-panel";
+import { AllRecordsPanel } from "@/components/research-desk/all-records-panel";
+import { ArchiveAnalysisPanel } from "@/components/research-desk/archive-analysis-panel";
 import { ResearchDeskFirstScreen } from "@/components/research-desk/research-desk-first-screen";
+import {
+  ResearchDeskMainTabs,
+  type ResearchDeskWorkspaceTab,
+} from "@/components/research-desk/research-desk-main-tabs";
+import { ResearchDeskSidebar } from "@/components/research-desk/research-desk-sidebar";
+import { ResearchDeskWorkspaceShell } from "@/components/research-desk/research-desk-workspace-shell";
 import {
   buildOutcomeAggregates,
   findRecordForOutcome,
@@ -10,11 +19,13 @@ import {
   hasReviewTagOption,
   resolveOutcomeId,
 } from "@/components/research-desk/research-desk-filtering";
-import { ResearchDeskSecondaryWorkspace } from "@/components/research-desk/research-desk-secondary-workspace";
+import { StrategyCandidateList } from "@/components/research-desk/strategy-candidate-list";
 import type {
+  ResearchDeskArchivePayload,
   ResearchDeskChartSlicePayload,
   ResearchDeskPayload,
   ResearchDeskRecord,
+  ResearchDeskRecordStatus,
   ResearchDeskResultFilter,
   ResearchDeskReviewTagFilter,
   ResearchDeskSelection,
@@ -58,6 +69,24 @@ function buildChartRequestUrl(selection: ResearchDeskSelection) {
   return `/api/research-desk/chart?${query.toString()}`;
 }
 
+function buildArchiveRequestUrl(input: {
+  selection: ResearchDeskSelection;
+  recordId?: string | null;
+  q?: string;
+}) {
+  const query = new URLSearchParams(input.selection);
+
+  if (input.recordId) {
+    query.set("recordId", input.recordId);
+  }
+
+  if (input.q?.trim()) {
+    query.set("q", input.q.trim());
+  }
+
+  return `/api/research-desk/archive?${query.toString()}`;
+}
+
 function isSameSelection(
   left: ResearchDeskSelection,
   right: ResearchDeskSelection,
@@ -93,6 +122,15 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
     useState<ResearchDeskReviewTagFilter>(null);
   const [isChartLoading, setIsChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
+  const [workspaceTab, setWorkspaceTab] =
+    useState<ResearchDeskWorkspaceTab>("active");
+  const [archivePayload, setArchivePayload] =
+    useState<ResearchDeskArchivePayload | null>(null);
+  const [selectedArchiveRecordId, setSelectedArchiveRecordId] =
+    useState<string | null>(null);
+  const [archiveQuery, setArchiveQuery] = useState("");
+  const [isArchiveLoading, setIsArchiveLoading] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
   const chartRequestIdRef = useRef(0);
 
   const filteredOutcomes = useMemo(
@@ -127,6 +165,29 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
 
     return null;
   }, [detailMode, records, selectedOutcome, selectedRecordId]);
+  const selectedArchiveRecord = useMemo(
+    () =>
+      archivePayload?.records.find(
+        (record) => record.id === selectedArchiveRecordId,
+      ) ??
+      archivePayload?.records[0] ??
+      null,
+    [archivePayload?.records, selectedArchiveRecordId],
+  );
+  const sidebarRecords =
+    workspaceTab === "archive" ? archivePayload?.records ?? [] : records;
+  const sidebarSelectedRecord =
+    workspaceTab === "archive" ? selectedArchiveRecord : selectedRecord;
+  const sidebarSelectedRecordId =
+    workspaceTab === "archive"
+      ? selectedArchiveRecord?.id ?? null
+      : selectedRecord?.id ?? selectedRecordId;
+
+  useEffect(() => {
+    if (workspaceTab === "archive" && !archivePayload && !isArchiveLoading) {
+      void refreshArchivePayload();
+    }
+  }, [archivePayload, isArchiveLoading, workspaceTab]);
 
   function syncLocalSelection(
     nextResultFilter: ResearchDeskResultFilter,
@@ -242,6 +303,36 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
     return payload.records;
   }
 
+  async function refreshArchivePayload(options: {
+    recordId?: string | null;
+    q?: string;
+  } = {}) {
+    setIsArchiveLoading(true);
+    setArchiveError(null);
+
+    try {
+      const payload = await parseResponse<ResearchDeskArchivePayload>(
+        await fetch(
+          buildArchiveRequestUrl({
+            selection,
+            recordId: options.recordId ?? selectedArchiveRecordId,
+            q: options.q ?? archiveQuery,
+          }),
+          { cache: "no-store" },
+        ),
+      );
+
+      setArchivePayload(payload);
+      setSelectedArchiveRecordId(payload.selectedRecordId);
+    } catch (error) {
+      setArchiveError(
+        error instanceof Error ? error.message : "归档分析加载失败",
+      );
+    } finally {
+      setIsArchiveLoading(false);
+    }
+  }
+
   async function refreshCandidates() {
     const payload = await parseResponse<{ candidates: typeof initialData.candidates }>(
       await fetch("/api/strategy-candidates", { cache: "no-store" }),
@@ -285,6 +376,7 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
     setSelectedRecordId(payload.record.id);
     setSelectedOutcomeId(null);
     setDetailMode("record");
+    setWorkspaceTab("active");
 
     await refreshChartSlice(selection, {
       preferredRecordId: payload.record.id,
@@ -314,7 +406,7 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
   }
 
   async function handleArchiveRecord(recordId: string) {
-    await parseResponse<{ record: { id: string } }>(
+    await parseResponse<{ record: ResearchDeskRecord }>(
       await fetch(`/api/trader-records/${recordId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -330,6 +422,7 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
         allowFallbackOutcome: true,
       }),
       refreshCandidates(),
+      refreshArchivePayload({ recordId }),
     ]);
 
     if (!nextSelectedRecordId) {
@@ -337,6 +430,53 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
       setSelectedOutcomeId(null);
       setDetailMode("record");
     }
+  }
+
+  async function handleSetRecordStatus(
+    recordId: string,
+    status: Exclude<ResearchDeskRecordStatus, "archived">,
+  ) {
+    const payload = await parseResponse<{ record: ResearchDeskRecord }>(
+      await fetch(`/api/trader-records/${recordId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "set-status", status }),
+      }),
+    );
+
+    setRecords((current) =>
+      current.map((record) =>
+        record.id === payload.record.id ? payload.record : record,
+      ),
+    );
+    setSelectedRecordId(payload.record.id);
+  }
+
+  async function handleSaveArchiveSummary(
+    recordId: string,
+    archiveSummary: string,
+  ) {
+    const payload = await parseResponse<{ record: ResearchDeskRecord }>(
+      await fetch(`/api/trader-records/${recordId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "update-archive-summary",
+          archiveSummary,
+        }),
+      }),
+    );
+
+    setArchivePayload((current) =>
+      current
+        ? {
+            ...current,
+            records: current.records.map((record) =>
+              record.id === payload.record.id ? payload.record : record,
+            ),
+          }
+        : current,
+    );
   }
 
   async function handleSettlePlan(input: {
@@ -445,44 +585,111 @@ export function ResearchDesk({ initialData }: ResearchDeskProps) {
     setDetailMode("record");
   }
 
-  return (
-    <section className="grid gap-8">
-      <ResearchDeskFirstScreen
-        selection={selection}
-        resultFilter={resultFilter}
-        reviewTagFilter={reviewTagFilter}
-        reviewTagOptions={chartState.reviewTagOptions}
-        filteredOutcomes={filteredOutcomes}
-        filteredSummary={filteredSummary}
-        selectedOutcome={selectedOutcome}
-        selectedRecord={selectedRecord}
-        records={records}
-        chartCandles={chartState.chart.candles}
-        chartError={chartError}
-        isChartLoading={isChartLoading}
-        onSelectionChange={handleSelectionChange}
-        onResultFilterChange={handleResultFilterChange}
-        onReviewTagFilterChange={handleReviewTagFilterChange}
-        onSelectOutcome={handleSelectOutcome}
-        onSaveReviewTags={handleSaveReviewTags}
-        onSettlePlan={handleSettlePlan}
-      />
+  function handleSelectSidebarRecord(recordId: string) {
+    if (workspaceTab === "archive") {
+      setSelectedArchiveRecordId(recordId);
+      void refreshArchivePayload({ recordId });
+      return;
+    }
 
-      <ResearchDeskSecondaryWorkspace
-        traders={traders}
-        records={records}
-        selectedRecordId={selectedRecord?.id ?? null}
-        candidates={candidates}
-        candidateMessage={candidateMessage}
-        candidateError={candidateError}
-        isRegeneratingCandidates={isRegeneratingCandidates}
-        onCreateTrader={handleCreateTrader}
-        onCreateRecord={handleCreateRecord}
-        onUpdateRecord={handleUpdateRecord}
-        onArchiveRecord={handleArchiveRecord}
-        onSelectRecord={handleSelectRecord}
-        onRegenerateCandidates={handleRegenerateCandidates}
+    handleSelectRecord(recordId);
+  }
+
+  return (
+    <ResearchDeskWorkspaceShell
+      sidebar={
+        <ResearchDeskSidebar
+          traders={traders}
+          records={sidebarRecords}
+          selectedRecord={sidebarSelectedRecord}
+          selectedRecordId={sidebarSelectedRecordId}
+          summary={
+            workspaceTab === "archive"
+              ? archivePayload?.summary ?? filteredSummary
+              : filteredSummary
+          }
+          selectorMode={workspaceTab === "archive" ? "archive" : "active"}
+          onCreateTrader={handleCreateTrader}
+          onCreateRecord={handleCreateRecord}
+          onSelectRecord={handleSelectSidebarRecord}
+          onSetRecordStatus={handleSetRecordStatus}
+          onArchiveRecord={handleArchiveRecord}
+        />
+      }
+    >
+      <ResearchDeskMainTabs
+        value={workspaceTab}
+        onValueChange={(nextTab) => {
+          setWorkspaceTab(nextTab);
+          if (nextTab === "archive") {
+            void refreshArchivePayload();
+          }
+        }}
+        activePanel={
+          <ActiveRecordsPanel
+            records={records}
+            selectedRecordId={selectedRecord?.id ?? selectedRecordId}
+            onSelectRecord={handleSelectRecord}
+          >
+            <ResearchDeskFirstScreen
+              selection={selection}
+              resultFilter={resultFilter}
+              reviewTagFilter={reviewTagFilter}
+              reviewTagOptions={chartState.reviewTagOptions}
+              filteredOutcomes={filteredOutcomes}
+              filteredSummary={filteredSummary}
+              selectedOutcome={selectedOutcome}
+              selectedRecord={selectedRecord}
+              records={records}
+              chartCandles={chartState.chart.candles}
+              chartError={chartError}
+              isChartLoading={isChartLoading}
+              onSelectionChange={handleSelectionChange}
+              onResultFilterChange={handleResultFilterChange}
+              onReviewTagFilterChange={handleReviewTagFilterChange}
+              onSelectOutcome={handleSelectOutcome}
+              onSaveReviewTags={handleSaveReviewTags}
+              onSettlePlan={handleSettlePlan}
+            />
+          </ActiveRecordsPanel>
+        }
+        recordsPanel={
+          <AllRecordsPanel
+            traders={traders}
+            records={records}
+            selectedRecordId={selectedRecord?.id ?? selectedRecordId}
+            onSelectRecord={handleSelectRecord}
+            onCreateTrader={handleCreateTrader}
+            onCreateRecord={handleCreateRecord}
+            onUpdateRecord={handleUpdateRecord}
+          />
+        }
+        archivePanel={
+          <ArchiveAnalysisPanel
+            payload={archivePayload}
+            selectedRecord={selectedArchiveRecord}
+            isLoading={isArchiveLoading}
+            error={archiveError}
+            query={archiveQuery}
+            onQueryChange={setArchiveQuery}
+            onRefresh={() => void refreshArchivePayload({ q: archiveQuery })}
+            onSelectRecord={(recordId) => {
+              setSelectedArchiveRecordId(recordId);
+              void refreshArchivePayload({ recordId });
+            }}
+            onSaveArchiveSummary={handleSaveArchiveSummary}
+          />
+        }
+        candidatesPanel={
+          <StrategyCandidateList
+            candidates={candidates}
+            onRegenerate={handleRegenerateCandidates}
+            isLoading={isRegeneratingCandidates}
+            message={candidateMessage}
+            error={candidateError}
+          />
+        }
       />
-    </section>
+    </ResearchDeskWorkspaceShell>
   );
 }
